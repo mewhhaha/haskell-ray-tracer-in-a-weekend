@@ -1,0 +1,52 @@
+<html>
+  <head></head>
+
+  <body>
+    <script type="module">
+      const input = document.getElementById("file");
+      const canvas = document.getElementById("canvas");
+      const ctx = canvas.getContext("2d");
+
+      input.addEventListener("change", async () => {
+        const content = await input.files[0].text();
+        const {
+          groups: { width, height, rest },
+        } = content.match(
+          /^P3\r?\n(?<width>\d+) (?<height>\d+)\r?\n(?<range>\d+)\r?\n(?<rest>(.|\s)*)\r?\n$/,
+        );
+
+        const pixels = rest.split(/\r?\n/).map((line) => {
+          return line.split(" ").map(parseFloat);
+        });
+
+        canvas.width = width;
+        canvas.height = height;
+        const imageData = ctx.createImageData(width, height);
+
+        for (let y = 0; y < height; y++) {
+          for (let x = 0; x < width; x++) {
+            const index = (x + y * width) * 4;
+            const pixel = pixels[x + y * width];
+
+            imageData.data[index] = pixel[0];
+            imageData.data[index + 1] = pixel[1];
+            imageData.data[index + 2] = pixel[2];
+            imageData.data[index + 3] = 255;
+          }
+        }
+
+        console.log(imageData.data);
+
+        ctx.putImageData(imageData, 0, 0);
+      });
+    </script>
+    <input
+      style="display: block"
+      type="file"
+      id="file"
+      name="file"
+      accept=".ppm"
+    />
+    <canvas id="canvas" width="400" height="255"></canvas>
+  </body>
+</html>
