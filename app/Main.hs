@@ -52,10 +52,11 @@ at :: Ray -> Double -> P3 Double
 at (Ray (P3 origin) direction) t = P3 (origin + fmap (* t) direction)
 
 sample :: Ray -> Color
-sample ray = Color $ start <&> (* (1.0 - a)) + (end <&> (* a))
+sample ray = Color blended
   where
     start = V3 1.0 1.0 1.0
     end = V3 0.5 0.7 1.0
+    blended = (start <&> (* (1.0 - a))) + (end <&> (* a))
     unitDirection = V3.unit ray.direction
     a = 0.5 * (unitDirection.y + 1.0)
 
@@ -74,9 +75,9 @@ main = do
   let pixelDeltaU = viewport.u <&> (/ fromIntegral window.width)
   let pixelDeltaV = viewport.v <&> (/ fromIntegral window.height)
 
-  let viewportUpperLeft = camera.translation - V3 0 0 camera.focalLength - (viewport.u <&> (/ 2)) + (viewport.v <&> (/ 2))
+  let viewportUpperLeft = camera.translation - V3 0 0 camera.focalLength - (viewport.u <&> (/ 2)) - (viewport.v <&> (/ 2))
 
-  let pixel00LOC = viewportUpperLeft + ((pixelDeltaU - pixelDeltaV) <&> (* 0.5))
+  let pixel00LOC = viewportUpperLeft + ((pixelDeltaU + pixelDeltaV) <&> (* 0.5))
 
   let pixels = do
         let w = window.width
