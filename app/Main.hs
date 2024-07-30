@@ -3,13 +3,14 @@
 
 module Main (main) where
 
+import Control.Monad (forM_)
 import Text.Printf (printf)
 import V2 (V2 (V2, x, y))
-import V3 (V3 (V3, x, y, z), unit)
+import V2 qualified
+import V3 (V3 (V3, x, y, z))
+import V3 qualified
 
 newtype Color = Color (V3 Double)
-
-newtype ColorByte = ColorByte (V3 Int)
 
 data Ratio = Ratio Int Int
 
@@ -22,8 +23,8 @@ data Ray = Ray
 
 data Window = Window
   { ratio :: Double,
-    height :: Int,
-    width :: Int
+    height :: Double,
+    width :: Double
   }
 
 data Viewport = Viewport
@@ -44,18 +45,36 @@ data PixelDelta = PixelDelta
   }
 
 makeWindow :: Ratio -> Int -> Window
-makeWindow (Ratio rw rh) width = Window ratio height width
+makeWindow (Ratio rw rh) width = Window ratio (fromIntegral height) (fromIntegral width)
   where
     ratio = fromIntegral rw / fromIntegral rh
-    height = max 1 $ floor (fromIntegral width / ratio)
+    height = max (1 :: Int) $ floor (fromIntegral width / ratio)
 
 makeViewport :: Double -> Window -> Viewport
 makeViewport height window = Viewport {width, height, u = V3 width 0 0, v = V3 0 (-height) 0}
   where
-    width = height * (fromIntegral window.width / fromIntegral window.height)
+    width = height * (window.width / window.height)
 
 at :: Ray -> Double -> P3 Double
 at (Ray (P3 origin) direction) t = P3 (origin + fmap (* t) direction)
+
+data BoundingVolume = Sphere
+  { center :: P3 Double,
+    radius :: Double
+  }
+
+hit :: Ray -> BoundingVolume -> Bool
+hit ray (Sphere center radius) = discriminant >= 0
+  where
+    oc =
+      let (P3 vc) = center
+          (P3 vo) = ray.origin
+       in vc - vo
+
+    a = V3.dot ray.direction ray.direction
+    b = 2.0 * V3.dot oc ray.direction
+    c = V3.dot oc oc - radius * radius
+    discriminant = b * b - 4 * a * c
 
 sample :: Ray -> Color
 sample ray = Color blended
@@ -80,8 +99,8 @@ main = do
 
   let pixelDelta =
         PixelDelta
-          { u = viewport.u <&> (/ fromIntegral window.width),
-            v = viewport.v <&> (/ fromIntegral window.height)
+          { u = viewport.u <&> (/ window.width),
+            v = viewport.v <&> (/ window.height)
           }
 
   let viewportUpperLeft = camera.center - V3 0 0 camera.focalLength - (viewport.u <&> (/ 2)) - (viewport.v <&> (/ 2))
@@ -89,29 +108,36 @@ main = do
   -- At 0,0 of the upper left viewport
   let pixelOrigin = viewportUpperLeft + ((pixelDelta.u + pixelDelta.v) <&> (* 0.5))
 
+  let sphere = Sphere {center = P3 (V3 0 0 (-1)), radius = 0.5}
+  let world = [sphere]
+
   let pixels = do
         j <- [0 .. window.height - 1]
         i <- [0 .. window.width - 1]
 
-        let offsetU = pixelDelta.u <&> (* fromIntegral i)
-        let offsetV = pixelDelta.v <&> (* fromIntegral j)
+        let offsetU = pixelDelta.u <&> (* i)
+        let offsetV = pixelDelta.v <&> (* j)
         let center = pixelOrigin + offsetU + offsetV
         let ray = Ray (P3 camera.center) direction
               where
                 direction = center - camera.center
 
-        return $ byteRange (sample ray)
+        if any (hit ray) world
+          then return $ rgb (Color (V3 1 0 0))
+          else return $ rgb (sample ray)
 
-  let header = formatHeader window
-  let colors = formatColor `concatMap` pixels
-
-  putStr $ header <> colors
+  putStr $ formatHeader (floor window.width) (floor window.height)
+  forM_ pixels $ \pixel -> do
+    putStr $ formatColor pixel
   where
-    formatColor (ColorByte (V3 r g b)) = printf "%d %d %d\n" r g b
-    formatHeader window = printf "P3\n%d %d\n255\n" window.width window.height
+    formatColor :: V3 Int -> String
+    formatColor (V3 r g b) = printf "%d %d %d\n" r g b
 
-byteRange :: Color -> ColorByte
-byteRange (Color (V3 r g b)) = ColorByte (V3 (u8 r) (u8 g) (u8 b))
+    formatHeader :: Int -> Int -> String
+    formatHeader = printf "P3\n%d %d\n255\n"
+
+rgb :: Color -> V3 Int
+rgb (Color (V3 r g b)) = V3 (u8 r) (u8 g) (u8 b)
   where
     u8 :: Double -> Int
     u8 = floor . (255.999 *)
