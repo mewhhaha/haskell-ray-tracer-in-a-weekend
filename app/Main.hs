@@ -37,6 +37,11 @@ data Camera = Camera
     focalLength :: Double
   }
 
+data PixelDelta = PixelDelta
+  { u :: V3 Double,
+    v :: V3 Double
+  }
+
 makeWindow :: Ratio -> Int -> Window
 makeWindow (Ratio rw rh) width = Window ratio height width
   where
@@ -72,21 +77,25 @@ main = do
             focalLength = 1.0
           }
 
-  let pixelDeltaU = viewport.u <&> (/ fromIntegral window.width)
-  let pixelDeltaV = viewport.v <&> (/ fromIntegral window.height)
+  let pixelDelta =
+        PixelDelta
+          { u = viewport.u <&> (/ fromIntegral window.width),
+            v = viewport.v <&> (/ fromIntegral window.height)
+          }
 
   let viewportUpperLeft = camera.translation - V3 0 0 camera.focalLength - (viewport.u <&> (/ 2)) - (viewport.v <&> (/ 2))
 
-  let pixel00LOC = viewportUpperLeft + ((pixelDeltaU + pixelDeltaV) <&> (* 0.5))
+  -- At 0,0 of the upper left viewport
+  let pixelOrigin = viewportUpperLeft + ((pixelDelta.u + pixelDelta.v) <&> (* 0.5))
 
   let pixels = do
         let w = window.width
         let h = window.height
-        j <- [0 .. w - 1]
-        i <- [0 .. h - 1]
+        j <- [0 .. h - 1]
+        i <- [0 .. w - 1]
 
-        let pixelCenter = pixel00LOC + (pixelDeltaU <&> (* fromIntegral i)) + (pixelDeltaV <&> (* fromIntegral j))
-        let rayDirection = pixelCenter - camera.translation
+        let center = pixelOrigin + (pixelDelta.u <&> (* fromIntegral i)) + (pixelDelta.v <&> (* fromIntegral j))
+        let rayDirection = center - camera.translation
         let ray = Ray (P3 camera.translation) rayDirection
 
         return $ byteRange (sample ray)
