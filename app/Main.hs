@@ -4,6 +4,7 @@
 module Main (main) where
 
 import Text.Printf (printf)
+import V2 (V2 (V2, x, y))
 import V3 (V3 (V3, x, y, z), unit)
 
 newtype Color = Color (V3 Double)
@@ -33,7 +34,7 @@ data Viewport = Viewport
   }
 
 data Camera = Camera
-  { translation :: V3 Double,
+  { center :: V3 Double,
     focalLength :: Double
   }
 
@@ -73,7 +74,7 @@ main = do
 
   let camera =
         Camera
-          { translation = V3 0 0 0,
+          { center = V3 0 0 0,
             focalLength = 1.0
           }
 
@@ -83,25 +84,26 @@ main = do
             v = viewport.v <&> (/ fromIntegral window.height)
           }
 
-  let viewportUpperLeft = camera.translation - V3 0 0 camera.focalLength - (viewport.u <&> (/ 2)) - (viewport.v <&> (/ 2))
+  let viewportUpperLeft = camera.center - V3 0 0 camera.focalLength - (viewport.u <&> (/ 2)) - (viewport.v <&> (/ 2))
 
   -- At 0,0 of the upper left viewport
   let pixelOrigin = viewportUpperLeft + ((pixelDelta.u + pixelDelta.v) <&> (* 0.5))
 
   let pixels = do
-        let w = window.width
-        let h = window.height
-        j <- [0 .. h - 1]
-        i <- [0 .. w - 1]
+        j <- [0 .. window.height - 1]
+        i <- [0 .. window.width - 1]
 
-        let center = pixelOrigin + (pixelDelta.u <&> (* fromIntegral i)) + (pixelDelta.v <&> (* fromIntegral j))
-        let rayDirection = center - camera.translation
-        let ray = Ray (P3 camera.translation) rayDirection
+        let offsetU = pixelDelta.u <&> (* fromIntegral i)
+        let offsetV = pixelDelta.v <&> (* fromIntegral j)
+        let center = pixelOrigin + offsetU + offsetV
+        let ray = Ray (P3 camera.center) direction
+              where
+                direction = center - camera.center
 
         return $ byteRange (sample ray)
 
   let header = formatHeader window
-  let colors = concatMap formatColor pixels
+  let colors = formatColor `concatMap` pixels
 
   putStr $ header <> colors
   where

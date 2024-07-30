@@ -19,7 +19,7 @@ common warnings
 executable ray-tracing-haskell
     import:           warnings
     main-is:          Main.hs
-    other-modules:    V3 
+    other-modules:    V3, V2 
     -- other-extensions:
     build-depends:    base ^>=4.17.2.1, mtl
     hs-source-dirs:   app
