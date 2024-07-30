@@ -4,18 +4,26 @@
 module Main (main) where
 
 import Control.Monad (forM_)
-import Data.Maybe (listToMaybe, mapMaybe)
+import Data.Function (on)
+import Data.List (sortBy)
+import Data.Maybe (isNothing, listToMaybe, mapMaybe)
+import GHC.Real (infinity)
 import Text.Printf (printf)
 import V2 (V2 (V2, x, y))
 import V2 qualified
 import V3 (V3 (V3, x, y, z))
 import V3 qualified
 
-newtype Color = Color (V3 Double)
+newtype Color = Color {v3 :: V3 Double}
 
 data Ratio = Ratio Int Int
 
-newtype P3 d = P3 (V3 d)
+newtype P3 d = P3
+  { v3 :: V3 d
+  }
+
+mkP3 :: d -> d -> d -> P3 d
+mkP3 x y z = P3 (V3 x y z)
 
 data Ray = Ray
   { origin :: P3 Double,
@@ -45,52 +53,84 @@ data PixelDelta = PixelDelta
     v :: V3 Double
   }
 
-makeWindow :: Ratio -> Int -> Window
-makeWindow (Ratio rw rh) width = Window ratio (fromIntegral height) (fromIntegral width)
+mkWindow :: Ratio -> Int -> Window
+mkWindow (Ratio rw rh) width = Window ratio (fromIntegral height) (fromIntegral width)
   where
     ratio = fromIntegral rw / fromIntegral rh
     height = max (1 :: Int) $ floor (fromIntegral width / ratio)
 
-makeViewport :: Double -> Window -> Viewport
-makeViewport height window = Viewport {width, height, u = V3 width 0 0, v = V3 0 (-height) 0}
+mkViewport :: Double -> Window -> Viewport
+mkViewport height window = Viewport {width, height, u = V3 width 0 0, v = V3 0 (-height) 0}
   where
     width = height * (window.width / window.height)
 
 at :: Ray -> Double -> P3 Double
 at (Ray (P3 origin) direction) t = P3 (origin + fmap (* t) direction)
 
-data BoundingVolume = Sphere
+class Hittable a where
+  hit :: Ray -> (Double, Double) -> a -> Maybe Hit
+
+data Sphere = Sphere
   { center :: P3 Double,
     radius :: Double
   }
 
-hit :: Ray -> BoundingVolume -> Maybe Double
-hit ray (Sphere center radius) =
-  if discriminant < 0
-    then Nothing
-    else
-      let t = (-b - sqrt discriminant) / (2.0 * a)
-       in Just t
-  where
-    oc =
-      let (P3 vc) = center
-          (P3 vo) = ray.origin
-       in vc - vo
+mkSphere :: P3 Double -> Double -> Sphere
+mkSphere center radius = Sphere center (max 0 radius)
 
-    a = V3.dot ray.direction ray.direction
-    b = -(2.0 * V3.dot oc ray.direction)
-    c = V3.dot oc oc - radius * radius
-    discriminant = b * b - 4 * a * c
+data Face = Front | Back
 
-sampleNormal :: Ray -> Double -> Color
-sampleNormal ray t = Color (fmap (+ 1) normal <&> (* 0.5))
-  where
-    normal =
-      let (P3 position) = at ray t
-       in V3.unit (position - V3 0 0 (-1))
+data Hit = Hit
+  { t :: Double,
+    p :: P3 Double,
+    normal :: V3 Double,
+    face :: Face
+  }
 
-sample :: Ray -> Color
-sample ray = Color blended
+instance Hittable Sphere where
+  hit :: Ray -> (Double, Double) -> Sphere -> Maybe Hit
+  hit ray (tmin, tmax) (Sphere center radius) = do
+    let oc = center.v3 - ray.origin.v3
+
+    let a = V3.lengthSquared ray.direction
+        h = V3.dot ray.direction oc
+        c = V3.lengthSquared oc - (radius * radius)
+
+    discriminant <- let value = (h * h) - (a * c) in if value < 0 then Nothing else Just value
+
+    let sqrtd = sqrt discriminant
+
+    let root1 = (h - sqrtd) / a
+        root2 = (h + sqrtd) / a
+
+    let withinLimits r = if r > tmin && r < tmax then Just r else Nothing
+
+    t <- findMaybe withinLimits [root1, root2]
+
+    let p = at ray t
+
+    let outwardNormal = (p.v3 - center.v3) <&> (/ radius)
+
+    let face = faceDirection outwardNormal
+
+    let normal = case face of
+          Front -> outwardNormal
+          Back -> -outwardNormal
+
+    Just $ Hit {t, p, normal, face}
+    where
+      faceDirection outwardNormal =
+        if V3.dot ray.direction outwardNormal < 0
+          then Front
+          else Back
+
+findMaybe f = listToMaybe . mapMaybe f
+
+sampleHit :: Hit -> Color
+sampleHit Hit {normal} = Color $ fmap (+ 1) normal <&> (* 0.5)
+
+sampleBackground :: Ray -> Color
+sampleBackground ray = Color blended
   where
     start = V3 1.0 1.0 1.0
     end = V3 0.5 0.7 1.0
@@ -98,11 +138,16 @@ sample ray = Color blended
     unitDirection = V3.unit ray.direction
     a = 0.5 * (unitDirection.y + 1.0)
 
+data Collidable = forall a. (Hittable a) => Collidable a
+
+instance Hittable Collidable where
+  hit ray limits (Collidable a) = hit ray limits a
+
 main :: IO ()
 main = do
-  let window = makeWindow (Ratio 16 9) 400
+  let window = mkWindow (Ratio 16 9) 400
 
-  let viewport = makeViewport 2.0 window
+  let viewport = mkViewport 2.0 window
 
   let camera =
         Camera
@@ -121,8 +166,10 @@ main = do
   -- At 0,0 of the upper left viewport
   let pixelOrigin = viewportUpperLeft + ((pixelDelta.u + pixelDelta.v) <&> (* 0.5))
 
-  let sphere = Sphere {center = P3 (V3 0 0 (-1)), radius = 0.5}
-  let world = [sphere]
+  let world =
+        [ Collidable $ mkSphere (mkP3 0 0 (-1)) 0.5,
+          Collidable $ mkSphere (mkP3 0 (-100.5) (-1)) 100
+        ]
 
   let pixels = do
         j <- [0 .. window.height - 1]
@@ -135,9 +182,9 @@ main = do
               where
                 direction = center - camera.center
 
-        let color = case first (hit ray) world of
-              Nothing -> sample ray
-              Just t -> sampleNormal ray t
+        let color = case cast ray (0, maxValue) world of
+              Nothing -> sampleBackground ray
+              Just h -> sampleHit h
         return $ rgb color
 
   putStr $ formatHeader (floor window.width) (floor window.height)
@@ -150,6 +197,14 @@ main = do
     formatHeader :: Int -> Int -> String
     formatHeader = printf "P3\n%d %d\n255\n"
 
+cast :: Ray -> (Double, Double) -> [Collidable] -> Maybe Hit
+cast ray (tmin, tmax) = foldl recast Nothing
+  where
+    recast Nothing c = hit ray (tmin, tmax) c
+    recast (Just h1) c = case hit ray (tmin, h1.t) c of
+      Nothing -> Just h1
+      Just h2 -> Just $ if h2.t < h1.t then h2 else h1
+
 rgb :: Color -> V3 Int
 rgb (Color (V3 r g b)) = V3 (u8 r) (u8 g) (u8 b)
   where
@@ -159,5 +214,13 @@ rgb (Color (V3 r g b)) = V3 (u8 r) (u8 g) (u8 b)
 (<&>) :: (Functor f) => f a -> (a -> b) -> f b
 (<&>) = flip fmap
 
-first :: (a1 -> Maybe a2) -> [a1] -> Maybe a2
-first f vs = listToMaybe (mapMaybe f vs)
+degreesToRadians :: Double -> Double
+degreesToRadians degrees = degrees * pi / 180
+
+maxValue :: (RealFloat a) => a
+maxValue = x
+  where
+    n = floatDigits x
+    b = floatRadix x
+    (_, u) = floatRange x
+    x = encodeFloat (b ^ n - 1) (u - n)

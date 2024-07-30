@@ -1,4 +1,4 @@
-module V3 (V3 (V3, x, y, z), V3.length, dot, cross, unit, merge, splat) where
+module V3 (V3 (V3, x, y, z), V3.length, lengthSquared, dot, unit, merge, splat) where
 
 data V3 d = V3 {x :: d, y :: d, z :: d}
 
@@ -17,13 +17,16 @@ instance Foldable V3 where
   foldr f b (V3 x y z) = f x (f y (f z b))
 
 length :: V3 Double -> Double
-length = sqrt . sum . fmap (\x -> x * x)
+length = sqrt . lengthSquared
+
+lengthSquared :: V3 Double -> Double
+lengthSquared = sum . fmap (\x -> x * x)
 
 dot :: V3 Double -> V3 Double -> Double
 dot v1 v2 = sum $ merge (*) v1 v2
 
-cross :: V3 Double -> V3 Double -> V3 Double
-cross (V3 x1 y1 z1) (V3 x2 y2 z2) = V3 (y1 * z2 - z1 * y2) (z1 * x2 - x1 * z2) (x1 * y2 - y1 * x2)
+-- cross :: V3 Double -> V3 Double -> V3 Double
+-- cross (V3 x1 y1 z1) (V3 x2 y2 z2) = V3 (y1 * z2 - z1 * y2) (z1 * x2 - x1 * z2) (x1 * y2 - y1 * x2)
 
 unit :: V3 Double -> V3 Double
 unit v = fmap (/ V3.length v) v
