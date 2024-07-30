@@ -1,4 +1,4 @@
-module V3 (V3 (V3, x, y, z), V3.length, dot, cross, unit, merge) where
+module V3 (V3 (V3, x, y, z), V3.length, dot, cross, unit, merge, splat) where
 
 data V3 d = V3 {x :: d, y :: d, z :: d}
 

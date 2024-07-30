@@ -1,4 +1,4 @@
-module V2 (V2 (V2, x, y), V2.length, dot, unit, merge) where
+module V2 (V2 (V2, x, y), V2.length, dot, unit, merge, splat) where
 
 data V2 d = V2 {x :: d, y :: d}
 

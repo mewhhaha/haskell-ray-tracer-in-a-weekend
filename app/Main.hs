@@ -4,6 +4,7 @@
 module Main (main) where
 
 import Control.Monad (forM_)
+import Data.Maybe (listToMaybe, mapMaybe)
 import Text.Printf (printf)
 import V2 (V2 (V2, x, y))
 import V2 qualified
@@ -63,8 +64,13 @@ data BoundingVolume = Sphere
     radius :: Double
   }
 
-hit :: Ray -> BoundingVolume -> Bool
-hit ray (Sphere center radius) = discriminant >= 0
+hit :: Ray -> BoundingVolume -> Maybe Double
+hit ray (Sphere center radius) =
+  if discriminant < 0
+    then Nothing
+    else
+      let t = (-b - sqrt discriminant) / (2.0 * a)
+       in Just t
   where
     oc =
       let (P3 vc) = center
@@ -72,9 +78,16 @@ hit ray (Sphere center radius) = discriminant >= 0
        in vc - vo
 
     a = V3.dot ray.direction ray.direction
-    b = 2.0 * V3.dot oc ray.direction
+    b = -(2.0 * V3.dot oc ray.direction)
     c = V3.dot oc oc - radius * radius
     discriminant = b * b - 4 * a * c
+
+sampleNormal :: Ray -> Double -> Color
+sampleNormal ray t = Color (fmap (+ 1) normal <&> (* 0.5))
+  where
+    normal =
+      let (P3 position) = at ray t
+       in V3.unit (position - V3 0 0 (-1))
 
 sample :: Ray -> Color
 sample ray = Color blended
@@ -122,9 +135,10 @@ main = do
               where
                 direction = center - camera.center
 
-        if any (hit ray) world
-          then return $ rgb (Color (V3 1 0 0))
-          else return $ rgb (sample ray)
+        let color = case first (hit ray) world of
+              Nothing -> sample ray
+              Just t -> sampleNormal ray t
+        return $ rgb color
 
   putStr $ formatHeader (floor window.width) (floor window.height)
   forM_ pixels $ \pixel -> do
@@ -144,3 +158,6 @@ rgb (Color (V3 r g b)) = V3 (u8 r) (u8 g) (u8 b)
 
 (<&>) :: (Functor f) => f a -> (a -> b) -> f b
 (<&>) = flip fmap
+
+first :: (a1 -> Maybe a2) -> [a1] -> Maybe a2
+first f vs = listToMaybe (mapMaybe f vs)
