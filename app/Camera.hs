@@ -1,4 +1,4 @@
-module Camera (render, mkCamera, Camera, Window (width, height, ratio), mkWindow, Ratio (Ratio), pixels) where
+module Camera (render, mkCamera, Camera (viewport, window), Window (width, height, ratio), Viewport, mkWindow, Ratio (Ratio), pixels) where
 
 import Color
 import Data.Functor ((<&>))
@@ -32,42 +32,60 @@ mkViewport height window = Viewport {width, height, u = V3 width 0 0, v = V3 0 (
   where
     width = height * (window.width / window.height)
 
-viewport00 :: Camera -> Viewport -> V3 Double
-viewport00 camera viewport = camera.center - V3 0 0 camera.focalLength - ((viewport.u + viewport.v) <&> (/ 2))
-
 data Camera = Camera
   { center :: V3 Double,
-    focalLength :: Double
+    focalLength :: Double,
+    window :: Window,
+    viewport :: Viewport,
+    du :: V3 Double,
+    dv :: V3 Double,
+    p00 :: V3 Double
   }
 
-mkCamera :: V3 Double -> Camera
-mkCamera center = Camera center 1.0
+mkCamera :: V3 Double -> (Int, Int) -> Int -> Camera
+mkCamera center ratio width = camera
+  where
+    camera =
+      Camera
+        { center,
+          focalLength = 1.0,
+          window,
+          viewport,
+          du,
+          dv,
+          -- top left of the viewport + offset to the first pixel
+          p00 = viewport00 + ((du + dv) <&> (* 0.5))
+        }
+    -- top left of the viewport
+    viewport00 = center - V3 0 0 focalLength - ((viewport.u + viewport.v) <&> (/ 2))
+    focalLength = 1.0
+    du = viewport.u <&> (/ window.width)
+    dv = viewport.v <&> (/ window.height)
+    window = mkWindow ratio width
+    viewport = mkViewport 2.0 window
 
 newtype Texture
   = Texture
   { pixels :: [V3 Int]
   }
 
-render :: forall t. (Foldable t) => Camera -> Window -> t CanHit -> Texture
-render camera window world = Texture $ do
-  let viewport = mkViewport 2.0 window
+render :: forall t. (Foldable t) => Camera -> t CanHit -> Texture
+render camera world = Texture $ do
+  let height = camera.window.height
+  let width = camera.window.width
 
-  let du = viewport.u <&> (/ window.width)
-  let dv = viewport.v <&> (/ window.height)
+  let du = camera.du
+  let dv = camera.dv
 
-  let p00 = viewport00 camera viewport + ((du + dv) <&> (* 0.5))
+  v <- [dv <&> (* j) | j <- [0 .. height - 1]]
+  u <- [du <&> (* i) | i <- [0 .. width - 1]]
 
-  v <- [dv <&> (* j) | j <- [0 .. window.height - 1]]
-  u <- [du <&> (* i) | i <- [0 .. window.width - 1]]
-
-  let center = p00 + u + v
+  let center = camera.p00 + u + v
   let ray = Ray (P3 camera.center) direction
         where
           direction = center - camera.center
 
-  let color = case cast ray universe {Interval.min = 0} world of
-        Nothing -> sampleBackground ray
-        Just h -> sampleHit h
+  let color = rayColor ray world
   return $ bytes color
 
 cast :: forall t. (Foldable t) => Ray -> Interval -> t CanHit -> Maybe Hit
@@ -78,17 +96,16 @@ cast ray interval = foldl recast Nothing
       Nothing -> Just h1
       Just h2 -> Just $ if h2.t < h1.t then h2 else h1
 
-sampleHit :: Hit -> Color
-sampleHit h = Color $ fmap (+ 1) h.normal <&> (* 0.5)
-
-sampleBackground :: Ray -> Color
-sampleBackground ray = Color blended
-  where
-    start = V3 1.0 1.0 1.0
-    end = V3 0.5 0.7 1.0
-    blended = (start <&> (* (1.0 - a))) + (end <&> (* a))
-    unitDirection = V3.unit ray.direction
-    a = 0.5 * (unitDirection.y + 1.0)
+rayColor :: forall t. (Foldable t) => Ray -> t CanHit -> Color
+rayColor ray world = case cast ray universe {Interval.min = 0} world of
+  Just h -> Color $ fmap (+ 1) h.normal <&> (* 0.5)
+  Nothing -> Color blended
+    where
+      start = splat 1.0
+      end = V3 0.5 0.7 1.0
+      blended = (start <&> (* (1.0 - a))) + (end <&> (* a))
+      unitDirection = V3.unit ray.direction
+      a = 0.5 * (unitDirection.y + 1.0)
 
 bytes :: Color -> V3 Int
 bytes (Color (V3 r g b)) = V3 (u8 r) (u8 g) (u8 b)
