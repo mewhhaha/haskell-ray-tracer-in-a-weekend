@@ -1,7 +1,8 @@
 {-# LANGUAGE OverloadedRecordDot #-}
 
-module Interval (Interval (Interval, min, max), contains, universe, size) where
+module Interval (Interval (Interval, min, max), contains, universe, size, inside) where
 
+import Data.Ord qualified as Prelude
 import GHC.Real (infinity)
 
 data Interval = Interval
@@ -14,6 +15,9 @@ size interval = interval.max - interval.min
 
 contains :: Interval -> Double -> Bool
 contains interval value = value >= interval.min && value <= interval.max
+
+inside :: Double -> Interval -> Double
+inside value interval = Prelude.clamp (interval.min, interval.max) value
 
 universe :: Interval
 universe = Interval (-fromRational infinity) (fromRational infinity)
