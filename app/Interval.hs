@@ -1,24 +1,25 @@
-module Interval (Interval (Interval), start, end, contains, universe, size) where
+{-# LANGUAGE OverloadedRecordDot #-}
+
+module Interval (Interval (Interval, min, max), contains, universe, size) where
 
 import GHC.Real (infinity)
 
 data Interval = Interval
-  { start :: Double,
-    end :: Double
+  { min :: Double,
+    max :: Double
   }
 
 size :: Interval -> Double
-size (Interval start end) = end - start
+size interval = interval.max - interval.min
 
 contains :: Interval -> Double -> Bool
-contains (Interval start end) value = value >= start && value <= end
+contains interval value = value >= interval.min && value <= interval.max
 
 universe :: Interval
 universe = Interval (-fromRational infinity) (fromRational infinity)
 
 instance Semigroup Interval where
-  (<>) (Interval start1 end1) (Interval start2 end2) = Interval (min start1 start2) (max end1 end2)
+  (<>) i1 i2 = Interval (Prelude.min i1.min i2.min) (Prelude.max i1.max i2.max)
 
 instance Monoid Interval where
   mempty = Interval 0 0
-  mconcat intervals = Interval (minimum $ map start intervals) (maximum $ map end intervals)

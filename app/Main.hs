@@ -5,7 +5,7 @@ module Main (main) where
 
 import Control.Monad (forM_)
 import Data.Function (on)
-import Data.List (sortBy)
+import Data.List (find, sortBy)
 import Data.Maybe (isNothing, listToMaybe, mapMaybe)
 import GHC.Real (infinity)
 import Interval
@@ -56,7 +56,7 @@ mkWindow :: Ratio -> Int -> Window
 mkWindow (Ratio rw rh) width = Window ratio (fromIntegral height) (fromIntegral width)
   where
     ratio = fromIntegral rw / fromIntegral rh
-    height = max (1 :: Int) $ floor (fromIntegral width / ratio)
+    height = Prelude.max (1 :: Int) $ floor (fromIntegral width / ratio)
 
 mkViewport :: Double -> Window -> Viewport
 mkViewport height window = Viewport {width, height, u = V3 width 0 0, v = V3 0 (-height) 0}
@@ -75,7 +75,7 @@ data Sphere = Sphere
   }
 
 mkSphere :: P3 Double -> Double -> Sphere
-mkSphere center radius = Sphere center (max 0 radius)
+mkSphere center radius = Sphere center (Prelude.max 0 radius)
 
 data Face = Front | Back
 
@@ -88,7 +88,7 @@ data Hit = Hit
 
 instance Hittable Sphere where
   hit :: Ray -> Interval -> Sphere -> Maybe Hit
-  hit ray (Interval tmin tmax) (Sphere center radius) = do
+  hit ray interval (Sphere center radius) = do
     let oc = center.v3 - ray.origin.v3
 
     let a = V3.lengthSquared ray.direction
@@ -102,9 +102,7 @@ instance Hittable Sphere where
     let root1 = (h - sqrtd) / a
         root2 = (h + sqrtd) / a
 
-    let withinLimits r = if r > tmin && r < tmax then Just r else Nothing
-
-    t <- findMaybe withinLimits [root1, root2]
+    t <- find (contains interval) [root1, root2]
 
     let p = at ray t
 
@@ -122,9 +120,6 @@ instance Hittable Sphere where
         if V3.dot ray.direction outwardNormal < 0
           then Front
           else Back
-
-findMaybe :: (a1 -> Maybe a2) -> [a1] -> Maybe a2
-findMaybe f = listToMaybe . mapMaybe f
 
 sampleHit :: Hit -> Color
 sampleHit Hit {normal} = Color $ fmap (+ 1) normal <&> (* 0.5)
@@ -182,7 +177,7 @@ main = do
               where
                 direction = center - camera.center
 
-        let color = case cast ray universe world of
+        let color = case cast ray universe {min = 0} world of
               Nothing -> sampleBackground ray
               Just h -> sampleHit h
         return $ rgb color
@@ -201,7 +196,7 @@ cast :: Ray -> Interval -> [Collidable] -> Maybe Hit
 cast ray interval = foldl recast Nothing
   where
     recast Nothing c = hit ray interval c
-    recast (Just h1) c = case hit ray interval {end = h1.t} c of
+    recast (Just h1) c = case hit ray interval {max = h1.t} c of
       Nothing -> Just h1
       Just h2 -> Just $ if h2.t < h1.t then h2 else h1
 
