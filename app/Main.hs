@@ -8,9 +8,8 @@ import Data.Function (on)
 import Data.List (sortBy)
 import Data.Maybe (isNothing, listToMaybe, mapMaybe)
 import GHC.Real (infinity)
+import Interval
 import Text.Printf (printf)
-import V2 (V2 (V2, x, y))
-import V2 qualified
 import V3 (V3 (V3, x, y, z))
 import V3 qualified
 
@@ -68,7 +67,7 @@ at :: Ray -> Double -> P3 Double
 at (Ray (P3 origin) direction) t = P3 (origin + fmap (* t) direction)
 
 class Hittable a where
-  hit :: Ray -> (Double, Double) -> a -> Maybe Hit
+  hit :: Ray -> Interval -> a -> Maybe Hit
 
 data Sphere = Sphere
   { center :: P3 Double,
@@ -88,8 +87,8 @@ data Hit = Hit
   }
 
 instance Hittable Sphere where
-  hit :: Ray -> (Double, Double) -> Sphere -> Maybe Hit
-  hit ray (tmin, tmax) (Sphere center radius) = do
+  hit :: Ray -> Interval -> Sphere -> Maybe Hit
+  hit ray (Interval tmin tmax) (Sphere center radius) = do
     let oc = center.v3 - ray.origin.v3
 
     let a = V3.lengthSquared ray.direction
@@ -124,6 +123,7 @@ instance Hittable Sphere where
           then Front
           else Back
 
+findMaybe :: (a1 -> Maybe a2) -> [a1] -> Maybe a2
 findMaybe f = listToMaybe . mapMaybe f
 
 sampleHit :: Hit -> Color
@@ -182,7 +182,7 @@ main = do
               where
                 direction = center - camera.center
 
-        let color = case cast ray (0, maxValue) world of
+        let color = case cast ray universe world of
               Nothing -> sampleBackground ray
               Just h -> sampleHit h
         return $ rgb color
@@ -197,11 +197,11 @@ main = do
     formatHeader :: Int -> Int -> String
     formatHeader = printf "P3\n%d %d\n255\n"
 
-cast :: Ray -> (Double, Double) -> [Collidable] -> Maybe Hit
-cast ray (tmin, tmax) = foldl recast Nothing
+cast :: Ray -> Interval -> [Collidable] -> Maybe Hit
+cast ray interval = foldl recast Nothing
   where
-    recast Nothing c = hit ray (tmin, tmax) c
-    recast (Just h1) c = case hit ray (tmin, h1.t) c of
+    recast Nothing c = hit ray interval c
+    recast (Just h1) c = case hit ray interval {end = h1.t} c of
       Nothing -> Just h1
       Just h2 -> Just $ if h2.t < h1.t then h2 else h1
 
@@ -216,11 +216,3 @@ rgb (Color (V3 r g b)) = V3 (u8 r) (u8 g) (u8 b)
 
 degreesToRadians :: Double -> Double
 degreesToRadians degrees = degrees * pi / 180
-
-maxValue :: (RealFloat a) => a
-maxValue = x
-  where
-    n = floatDigits x
-    b = floatRadix x
-    (_, u) = floatRange x
-    x = encodeFloat (b ^ n - 1) (u - n)
