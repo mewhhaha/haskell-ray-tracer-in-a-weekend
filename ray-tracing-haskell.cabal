@@ -19,8 +19,9 @@ common warnings
 executable ray-tracing-haskell
     import:           warnings
     main-is:          Main.hs
-    other-modules:    V3, Interval
+    other-modules:    V3, Interval, Camera, Color, Ray, Sphere
     -- other-extensions:
     build-depends:    base ^>=4.17.2.1, mtl
     hs-source-dirs:   app
     default-language: GHC2021
+    default-extensions: DuplicateRecordFields, OverloadedRecordDot

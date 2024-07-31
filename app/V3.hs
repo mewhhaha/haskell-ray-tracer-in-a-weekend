@@ -1,4 +1,4 @@
-module V3 (V3 (V3, x, y, z), V3.length, lengthSquared, dot, unit, merge, splat) where
+module V3 (P3 (P3, v3), mkP3, V3 (V3, x, y, z), V3.length, lengthSquared, dot, unit, merge, splat) where
 
 data V3 d = V3 {x :: d, y :: d, z :: d}
 
@@ -36,3 +36,10 @@ merge f (V3 x1 y1 z1) (V3 x2 y2 z2) = V3 (f x1 x2) (f y1 y2) (f z1 z2)
 
 splat :: d -> V3 d
 splat v = V3 v v v
+
+newtype P3 d = P3
+  { v3 :: V3 d
+  }
+
+mkP3 :: d -> d -> d -> P3 d
+mkP3 x y z = P3 (V3 x y z)
