@@ -68,7 +68,7 @@ mkCamera center ratio width = camera
           dv,
           -- top left of the viewport + offset to the first pixel
           p00 = viewport00 + ((du + dv) <&> (* 0.5)),
-          samples = mkSamples 1
+          samples = mkSamples 100
         }
     -- top left of the viewport
     viewport00 = center - V3 0 0 focalLength - ((viewport.u + viewport.v) <&> (/ 2))
@@ -113,8 +113,8 @@ render camera = do
   let colorize ((gx, gy), (u, v)) = do
         let center = camera.p00 + u + v
 
-        let xs = take samples.count (randomRs (-0.5, 0.5) gx)
-        let ys = take samples.count (randomRs (-0.5, 0.5) gy)
+        let xs = take (samples.count - 1) (randomRs (-0.5, 0.5) gx)
+        let ys = take (samples.count - 1) (randomRs (-0.5, 0.5) gy)
 
         let offsets = [(du <&> (* x)) + (dv <&> (* y)) | (x, y) <- zip xs ys]
 
