@@ -3,6 +3,7 @@ module Camera (render, mkCamera, Camera (viewport, window), Window (width, heigh
 import Color
 import Control.Monad.State
 import Data.Functor ((<&>))
+import Data.Traversable (for)
 import Interval
 import Ray (CanHit, Hit, Hittable (hit), Ray (Ray), direction, normal, t)
 import System.Random (Random (randomR, randomRs), RandomGen (split), StdGen)
@@ -67,7 +68,7 @@ mkCamera center ratio width = camera
           dv,
           -- top left of the viewport + offset to the first pixel
           p00 = viewport00 + ((du + dv) <&> (* 0.5)),
-          samples = mkSamples 10
+          samples = mkSamples 100
         }
     -- top left of the viewport
     viewport00 = center - V3 0 0 focalLength - ((viewport.u + viewport.v) <&> (/ 2))
@@ -82,42 +83,49 @@ newtype Texture
   { pixels :: [V3 Int]
   }
 
+generators :: StdGen -> [(StdGen, StdGen)]
+generators g = (g', g'') : generators g''
+  where
+    (g', g'') = split g
+
 render :: Camera -> World Texture
 render camera = do
   objects <- gets env
+  (g, g') <- gets (split . rng)
+  modify $ \w -> w {rng = g'}
+
   let du = camera.du
   let dv = camera.dv
 
-  let uvs = do
-        let height = camera.window.height
-        let width = camera.window.width
+  let height = camera.window.height
+  let width = camera.window.width
 
+  let gs = generators g
+
+  let uvs = do
         v <- [dv <&> (* j) | j <- [0 .. height - 1]]
         u <- [du <&> (* i) | i <- [0 .. width - 1]]
+
         return (u, v)
 
-  pixels <- forM uvs $ \(u, v) -> do
-    let center = camera.p00 + u + v
+  let colorize ((gx, gy), (u, v)) = do
+        let center = camera.p00 + u + v
 
-    (gx, gy) <- gets (split . rng)
-    modify $ \w -> w {rng = snd (split gy)}
+        let xs = take camera.samples.count (randomRs (-0.5, 0.5) gx)
+        let ys = take camera.samples.count (randomRs (-0.5, 0.5) gy)
 
-    let xs = take camera.samples.count (randomRs (-0.5, 0.5) gx)
-    let ys = take camera.samples.count (randomRs (-0.5, 0.5) gy)
+        let offsets = [(du <&> (* x)) + (dv <&> (* y)) | (x, y) <- zip xs ys]
 
-    let offsets = [(du <&> (* x)) + (dv <&> (* y)) | (x, y) <- zip xs ys]
+        let direction = center - camera.center
 
-    let baseRay = Ray (P3 camera.center) direction
-          where
-            direction = center - camera.center
+        let rays = [Ray (P3 camera.center) (direction + offset) | offset <- offsets]
 
-    let randomRays =
-          [ baseRay {direction = baseRay.direction + offset}
-            | offset <- offsets
-          ]
+        let samples = mconcat $ [sample ray objects | ray <- rays]
+        let color = Color $ samples.v3 <&> (* camera.samples.scale)
 
-    let color = mconcat [sample ray objects | ray <- randomRays]
-    return $ bytes $ Color (color.v3 <&> (* camera.samples.scale))
+        bytes color
+
+  let pixels = fmap colorize (zip gs uvs)
 
   return $ Texture pixels
 
