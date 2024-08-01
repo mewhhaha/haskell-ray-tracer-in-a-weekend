@@ -68,7 +68,7 @@ mkCamera center ratio width = camera
           dv,
           -- top left of the viewport + offset to the first pixel
           p00 = viewport00 + ((du + dv) <&> (* 0.5)),
-          samples = mkSamples 100
+          samples = mkSamples 1
         }
     -- top left of the viewport
     viewport00 = center - V3 0 0 focalLength - ((viewport.u + viewport.v) <&> (/ 2))
@@ -84,7 +84,7 @@ newtype Texture
   }
 
 generators :: StdGen -> [(StdGen, StdGen)]
-generators g = (g', g'') : generators g''
+generators g = (g, g') : generators g''
   where
     (g', g'') = split g
 
@@ -100,6 +100,8 @@ render camera = do
   let height = camera.window.height
   let width = camera.window.width
 
+  let samples = camera.samples
+
   let gs = generators g
 
   let uvs = do
@@ -111,17 +113,17 @@ render camera = do
   let colorize ((gx, gy), (u, v)) = do
         let center = camera.p00 + u + v
 
-        let xs = take camera.samples.count (randomRs (-0.5, 0.5) gx)
-        let ys = take camera.samples.count (randomRs (-0.5, 0.5) gy)
+        let xs = take samples.count (randomRs (-0.5, 0.5) gx)
+        let ys = take samples.count (randomRs (-0.5, 0.5) gy)
 
         let offsets = [(du <&> (* x)) + (dv <&> (* y)) | (x, y) <- zip xs ys]
 
         let direction = center - camera.center
 
-        let rays = [Ray (P3 camera.center) (direction + offset) | offset <- offsets]
+        let rays = [Ray (P3 camera.center) (direction + offset) | offset <- mempty : offsets]
 
-        let samples = mconcat $ [sample ray objects | ray <- rays]
-        let color = Color $ samples.v3 <&> (* camera.samples.scale)
+        let additive = mconcat $ [sample ray objects | ray <- rays]
+        let color = Color $ additive.v3 <&> (* samples.scale)
 
         bytes color
 

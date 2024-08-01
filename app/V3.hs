@@ -3,7 +3,7 @@ module V3 (P3 (P3, v3), mkP3, V3 (V3, x, y, z), V3.length, lengthSquared, dot, u
 data V3 d = V3 {x :: d, y :: d, z :: d}
 
 instance Num (V3 Double) where
-  (+) = merge (+)
+  (+) = (<>)
   (*) v1 v2 = fmap (sum . merge (*) v2 . splat) v1
   abs = fmap abs
   signum = fmap signum
@@ -15,6 +15,12 @@ instance Functor V3 where
 
 instance Foldable V3 where
   foldr f b (V3 x y z) = f x (f y (f z b))
+
+instance Semigroup (V3 Double) where
+  (<>) = merge (+)
+
+instance Monoid (V3 Double) where
+  mempty = splat 0
 
 length :: V3 Double -> Double
 length = sqrt . lengthSquared
