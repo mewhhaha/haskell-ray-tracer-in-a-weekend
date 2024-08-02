@@ -70,7 +70,7 @@ mkCamera center ratio width = camera
           dv,
           -- top left of the viewport + offset to the first pixel
           p00 = viewport00 + ((du + dv) <&> (* 0.5)),
-          samples = mkSamples 100 10
+          samples = mkSamples 100 50
         }
     -- top left of the viewport
     viewport00 = center - V3 0 0 focalLength - ((viewport.u + viewport.v) <&> (/ 2))
@@ -108,21 +108,21 @@ render camera = do
         v <- [dv <&> (* j) | j <- [0 .. height - 1]]
         u <- [du <&> (* i) | i <- [0 .. width - 1]]
 
-        return (u, v)
+        return (u + v)
 
   let pixels = fmap (draw camera objects) (zip gs uvs) `using` parListChunk 64 rdeepseq
 
   return $ Texture pixels
 
-draw :: forall t. (Foldable t) => Camera -> t CanHit -> (StdGen, (V3 Double, V3 Double)) -> V3 Int
-draw camera objects (gen, (u, v)) = do
+draw :: forall t. (Foldable t) => Camera -> t CanHit -> (StdGen, V3 Double) -> V3 Int
+draw camera objects (gen, uv) = do
   let du = camera.du
   let dv = camera.dv
   let samples = camera.samples
 
   let (gx, gy) = split gen
 
-  let center = camera.p00 + u + v
+  let center = camera.p00 + uv
 
   let xs = take (samples.count - 1) (randomRs (-0.5, 0.5) gx)
   let ys = take (samples.count - 1) (randomRs (-0.5, 0.5) gy)
@@ -131,34 +131,36 @@ draw camera objects (gen, (u, v)) = do
 
   let direction = center - camera.center
 
-  let rays = [Ray (P3 camera.center) (direction + offset) | offset <- offsets]
+  let rays = [Ray (P3 camera.center) (direction + offset) | offset <- mempty : offsets]
 
-  let pixel_datas = [sample samples.bounces g ray objects | (g, ray) <- zip (generators gen) rays]
-  let additive = mconcat (shader <$> pixel_datas)
+  let sampled_square = [sample samples.bounces g ray objects | (g, ray) <- zip (generators gen) rays]
+  let brightness = mconcat sampled_square <&> (* samples.scale)
 
-  let color = Color $ additive.v3 <&> (* samples.scale)
+  let color = shader $ PixelData {color = brightness, uv}
 
   bytes color
 
-newtype PixelData = PixelData
-  { color :: V3 Double
+data PixelData = PixelData
+  { color :: V3 Double,
+    uv :: V3 Double
   }
 
-sample :: forall t. (Foldable t) => Int -> StdGen -> Ray -> t CanHit -> PixelData
+sample :: forall t. (Foldable t) => Int -> StdGen -> Ray -> t CanHit -> V3 Double
 sample depth g r world = do
   let iterations = take depth $ generators g
 
-  case foldM bounce (r, PixelData {color = splat 1.0}) iterations of
-    Right (_, pixel_data) -> pixel_data
+  case foldM bounce (r, splat 1.0) iterations of
+    Right _ -> mempty
     Left pixel_data -> pixel_data
   where
-    bounce (ray, pixel_data) g' = case cast ray universe {Interval.min = 0} world of
+    bounce :: (Ray, V3 Double) -> StdGen -> Either (V3 Double) (Ray, V3 Double)
+    bounce (ray, ray_color) g' = case cast ray universe {Interval.min = 0.001} world of
       Just h -> do
         let direction = fst $ randomOnHemisphere g' h.normal
         let ray' = Ray h.p direction
-        let pixel_data' = PixelData {color = pixel_data.color <&> (* 0.5)}
-        Right (ray', pixel_data')
-      Nothing -> Left pixel_data
+        let brightness = ray_color <&> (* 0.5)
+        Right (ray', brightness)
+      Nothing -> Left ray_color
 
 shader :: PixelData -> Color
 shader (PixelData {color}) = Color $ V3.merge (*) base color

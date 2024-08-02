@@ -34,13 +34,13 @@ instance Hittable Sphere where
 
     let p = at ray t
 
-    let outwardNormal = (p.v3 - center.v3) <&> (/ radius)
+    let outward_normal = (p.v3 - center.v3) <&> (/ radius)
 
-    let face = faceDirection outwardNormal
+    let face = faceDirection outward_normal
 
     let normal = case face of
-          Front -> outwardNormal
-          Back -> -outwardNormal
+          Front -> outward_normal
+          Back -> -outward_normal
 
     Just $ Hit {t, p, normal, face}
     where
