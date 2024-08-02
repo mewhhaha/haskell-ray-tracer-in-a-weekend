@@ -20,12 +20,14 @@ main = do
   let material_ground = Lambertian {albedo = rgb 0.8 0.8 0.0}
   let material_center = Lambertian {albedo = rgb 0.1 0.2 0.5}
   let material_left = Dialectric {refraction_index = 1.5}
+  let material_bubble = Dialectric {refraction_index = 1 / 1.5}
   let material_right = Metal {albedo = rgb 0.8 0.6 0.2, fuzz = 1.0}
 
   let env =
         [ CanHit $ mkSphere (0, -100.5, -1) 100 material_ground,
           CanHit $ mkSphere (0, 0, -1.2) 0.5 material_center,
           CanHit $ mkSphere (-1, 0, -1) 0.5 material_left,
+          CanHit $ mkSphere (-1, 0, -1) 0.4 material_bubble,
           CanHit $ mkSphere (1, 0, -1) 0.5 material_right
         ]
 

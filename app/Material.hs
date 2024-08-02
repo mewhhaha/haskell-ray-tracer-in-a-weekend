@@ -41,15 +41,30 @@ newtype Dialectric = Dialectric
 
 instance Material Dialectric where
   scatter :: StdGen -> Ray -> Hit -> Dialectric -> Maybe (Ray, Color)
-  scatter _ ray h Dialectric {refraction_index} = do
+  scatter g ray h Dialectric {refraction_index} = do
     let attenuation = rgb 1 1 1
     let ri = case h.face of
           Front -> 1 / refraction_index
           Back -> refraction_index
 
     let unit_direction = V3.unit ray.direction
+
+    let cos_theta = min (V3.dot (-unit_direction) h.normal) 1
+    let sin_theta = sqrt (1 - cos_theta * cos_theta)
+
+    let random_reflection_value = fst (randomR (0, 1) g)
+    let cannot_refract = ri * sin_theta > 1
+    let must_reflect = reflectance cos_theta ri > random_reflection_value
+
+    let reflected = reflect unit_direction h.normal
     let refracted = refract unit_direction h.normal ri
-    let scattered = Ray (p h) refracted
+
+    let direction =
+          if cannot_refract || must_reflect
+            then reflected
+            else refracted
+
+    let scattered = Ray (p h) direction
     Just (scattered, attenuation)
 
 randomOnHemisphere :: StdGen -> V3 Double -> (V3 Double, StdGen)
@@ -76,3 +91,9 @@ refract uv n etai_over_etat = do
   let r_out_parallel = fmap ((-sqrt (abs (1 - lengthSquared r_out_perp))) *) n
 
   r_out_perp + r_out_parallel
+
+reflectance :: Double -> Double -> Double
+reflectance cosine refraction_index = do
+  let r0 = (1 - refraction_index) / (1 + refraction_index)
+  let r0' = r0 * r0
+  r0' + (1 - r0') * ((1 - cosine) ** 5)
