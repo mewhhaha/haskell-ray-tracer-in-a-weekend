@@ -1,22 +1,20 @@
-{-# LANGUAGE DuplicateRecordFields #-}
-{-# LANGUAGE OverloadedRecordDot #-}
-
 module Main (main) where
 
 import Camera (height, mkCamera, pixels, render, width, window)
-import Control.Monad (forM_)
 import Control.Monad.State (evalState)
 import Ray (CanHit (CanHit))
 import Sphere (mkSphere)
 import System.Random (mkStdGen)
 import Text.Printf (printf)
-import V3 (V3 (V3, x, y, z), mkP3)
+import V3 (V3 (V3), mkP3)
 import V3 qualified
 import World (WorldState (WorldState))
 
 main :: IO ()
 main = do
   let camera = mkCamera (V3.splat 0) (16, 9) 400
+  let width = camera.window.width
+  let height = camera.window.height
 
   let env =
         [ CanHit $ mkSphere (mkP3 0 0 (-1)) 0.5,
@@ -28,9 +26,12 @@ main = do
 
   let texture = evalState (render camera) world
 
-  putStr $ formatHeader (floor camera.window.width) (floor camera.window.height)
-  forM_ texture.pixels $ \pixel -> do
-    putStr $ formatColor pixel
+  let header = formatHeader (floor width) (floor height)
+  let body = formatColor <$> texture.pixels
+
+  let output = header <> mconcat body
+
+  putStr output
   where
     formatColor :: V3 Int -> String
     formatColor (V3 r g b) = printf "%d %d %d\n" r g b

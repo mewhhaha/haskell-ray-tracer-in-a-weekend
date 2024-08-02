@@ -1,6 +1,14 @@
+{-# LANGUAGE DeriveGeneric #-}
+
 module V3 (P3 (P3, v3), mkP3, V3 (V3, x, y, z), V3.length, lengthSquared, dot, unit, merge, splat) where
 
+import Control.Parallel.Strategies (NFData)
+import GHC.Generics (Generic)
+
 data V3 d = V3 {x :: d, y :: d, z :: d}
+  deriving (Show, Generic)
+
+instance (NFData d) => NFData (V3 d)
 
 instance Num (V3 Double) where
   (+) = (<>)
@@ -11,6 +19,7 @@ instance Num (V3 Double) where
   negate = fmap negate
 
 instance Functor V3 where
+  fmap :: (a -> b) -> V3 a -> V3 b
   fmap f (V3 x y z) = V3 (f x) (f y) (f z)
 
 instance Foldable V3 where

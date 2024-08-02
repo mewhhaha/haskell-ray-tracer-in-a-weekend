@@ -1,4 +1,4 @@
 set shell := ["powershell.exe", "-c"]
 
 run: 
-    cabal run --verbose=0 > image.ppm
+    cabal install --installdir="./build" --overwrite-polic=always; .\build\ray-tracing-haskell.exe > image.ppm +RTS -ls; 

@@ -21,7 +21,13 @@ executable ray-tracing-haskell
     main-is:          Main.hs
     other-modules:    V3, Interval, Camera, Color, Ray, Sphere, World
     -- other-extensions:
-    build-depends:    base ^>=4.17.2.1, mtl, random
+    build-depends:    base ^>=4.17.2.1, mtl, random, parallel, text
     hs-source-dirs:   app
     default-language: GHC2021
-    default-extensions: DuplicateRecordFields, OverloadedRecordDot
+    default-extensions: DuplicateRecordFields, OverloadedRecordDot, OverloadedStrings
+    ghc-options:
+        -O3
+        -threaded
+        -rtsopts
+        -eventlog
+        -with-rtsopts=-N

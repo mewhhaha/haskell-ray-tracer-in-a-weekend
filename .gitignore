@@ -1,3 +1,6 @@
 dist-newstyle
 target
 image.ppm
+*.eventlog
+threadscope*
+build
