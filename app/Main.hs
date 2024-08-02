@@ -1,24 +1,32 @@
 module Main (main) where
 
 import Camera (height, mkCamera, pixels, render, width, window)
+import Color (rgb)
 import Control.Monad.State (evalState)
+import Material (Dialectric (..), Lambertian (..), Metal (..))
 import Ray (CanHit (CanHit))
 import Sphere (mkSphere)
 import System.Random (mkStdGen)
 import Text.Printf (printf)
 import V3 (V3 (V3), mkP3)
-import V3 qualified
 import World (WorldState (WorldState))
 
 main :: IO ()
 main = do
-  let camera = mkCamera (V3.splat 0) (16, 9) 400
+  let camera = mkCamera mempty (16, 9) 400
   let width = camera.window.width
   let height = camera.window.height
 
+  let material_ground = Lambertian {albedo = rgb 0.8 0.8 0.0}
+  let material_center = Lambertian {albedo = rgb 0.1 0.2 0.5}
+  let material_left = Dialectric {refraction_index = 1.5}
+  let material_right = Metal {albedo = rgb 0.8 0.6 0.2, fuzz = 1.0}
+
   let env =
-        [ CanHit $ mkSphere (mkP3 0 0 (-1)) 0.5,
-          CanHit $ mkSphere (mkP3 0 (-100.5) (-1)) 100
+        [ CanHit $ mkSphere (0, -100.5, -1) 100 material_ground,
+          CanHit $ mkSphere (0, 0, -1.2) 0.5 material_center,
+          CanHit $ mkSphere (-1, 0, -1) 0.5 material_left,
+          CanHit $ mkSphere (1, 0, -1) 0.5 material_right
         ]
 
   let rng = mkStdGen 0

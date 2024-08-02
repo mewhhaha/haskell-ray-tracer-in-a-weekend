@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 
-module V3 (P3 (P3, v3), mkP3, V3 (V3, x, y, z), V3.length, lengthSquared, dot, unit, merge, splat) where
+module V3 (P3 (P3, v3), mkP3, V3 (V3, x, y, z), V3.length, lengthSquared, dot, unit, splat, isNearZero) where
 
 import Control.Parallel.Strategies (NFData)
 import GHC.Generics (Generic)
@@ -12,7 +12,7 @@ instance (NFData d) => NFData (V3 d)
 
 instance Num (V3 Double) where
   (+) = (<>)
-  (*) v1 v2 = fmap (sum . merge (*) v2 . splat) v1
+  (*) = merge (*)
   abs = fmap abs
   signum = fmap signum
   fromInteger v = splat (fromInteger v)
@@ -58,3 +58,6 @@ newtype P3 d = P3
 
 mkP3 :: d -> d -> d -> P3 d
 mkP3 x y z = P3 (V3 x y z)
+
+isNearZero :: V3 Double -> Bool
+isNearZero v = let s = 1e-8 in all (< s) v

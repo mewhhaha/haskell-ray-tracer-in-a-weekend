@@ -1,3 +1,5 @@
+{-# LANGUAGE AllowAmbiguousTypes #-}
+
 module Camera (render, mkCamera, Camera (viewport, window), Window (width, height, ratio), Viewport, mkWindow, Ratio (Ratio), pixels) where
 
 import Color
@@ -6,7 +8,7 @@ import Control.Parallel.Strategies (parListChunk, rdeepseq, using)
 import Data.Functor ((<&>))
 import Debug.Trace
 import Interval
-import Ray (CanHit, Hit, Hittable (hit), Ray (Ray), normal, p, t)
+import Ray (CanHit, Hit (Hit), Hittable (hit), Material (scatter), Ray (Ray), direction, material, normal, p, t)
 import System.Random (Random (randomR, randomRs), RandomGen (split), StdGen)
 import V3
 import World (World, env, rng)
@@ -69,11 +71,11 @@ mkCamera center ratio width = camera
           du,
           dv,
           -- top left of the viewport + offset to the first pixel
-          p00 = viewport00 + ((du + dv) <&> (* 0.5)),
+          p00 = viewport00 + fmap (0.5 *) (du + dv),
           samples = mkSamples 100 50
         }
     -- top left of the viewport
-    viewport00 = center - V3 0 0 focalLength - ((viewport.u + viewport.v) <&> (/ 2))
+    viewport00 = center - V3 0 0 focalLength - fmap (0.5 *) (viewport.u + viewport.v)
     focalLength = 1.0
     du = viewport.u <&> (/ window.width)
     dv = viewport.v <&> (/ window.height)
@@ -105,8 +107,8 @@ render camera = do
   let gs = generators g
 
   let uvs = do
-        v <- [dv <&> (* j) | j <- [0 .. height - 1]]
-        u <- [du <&> (* i) | i <- [0 .. width - 1]]
+        v <- [fmap (j *) dv | j <- [0 .. height - 1]]
+        u <- [fmap (i *) du | i <- [0 .. width - 1]]
 
         return (u + v)
 
@@ -127,59 +129,65 @@ draw camera objects (gen, uv) = do
   let xs = take (samples.count - 1) (randomRs (-0.5, 0.5) gx)
   let ys = take (samples.count - 1) (randomRs (-0.5, 0.5) gy)
 
-  let offsets = [(du <&> (* x)) + (dv <&> (* y)) | (x, y) <- zip xs ys]
+  let offsets = [fmap (x *) du + fmap (y *) dv | (x, y) <- zip xs ys]
 
   let direction = center - camera.center
 
   let rays = [Ray (P3 camera.center) (direction + offset) | offset <- mempty : offsets]
 
   let sampled_square = [sample samples.bounces g ray objects | (g, ray) <- zip (generators gen) rays]
-  let brightness = mconcat sampled_square <&> (* samples.scale)
+  let color = mconcat (shader <$> sampled_square)
 
-  let color = shader $ PixelData {color = brightness, uv}
-
-  bytes color
+  bytes $ Color (fmap (samples.scale *) color.v3)
 
 data PixelData = PixelData
-  { color :: V3 Double,
-    uv :: V3 Double
+  { attenuation :: V3 Double,
+    ray :: Ray
   }
 
-sample :: forall t. (Foldable t) => Int -> StdGen -> Ray -> t CanHit -> V3 Double
+sample :: forall t. (Foldable t) => Int -> StdGen -> Ray -> t CanHit -> PixelData
 sample depth g r world = do
   let iterations = take depth $ generators g
 
   case foldM bounce (r, splat 1.0) iterations of
-    Right _ -> mempty
-    Left pixel_data -> pixel_data
+    Right (ray, _) -> PixelData {ray, attenuation = mempty}
+    Left (ray, attenuation) -> PixelData {ray, attenuation}
   where
-    bounce :: (Ray, V3 Double) -> StdGen -> Either (V3 Double) (Ray, V3 Double)
+    bounce :: (Ray, V3 Double) -> StdGen -> Either (Ray, V3 Double) (Ray, V3 Double)
     bounce (ray, ray_color) g' = case cast ray universe {Interval.min = 0.001} world of
-      Just h -> do
-        let direction = fst $ randomOnHemisphere g' h.normal
-        let ray' = Ray h.p direction
-        let brightness = ray_color <&> (* 0.5)
-        Right (ray', brightness)
-      Nothing -> Left ray_color
+      Just h@Hit {material} -> do
+        case scatter g' ray h material of
+          Just (ray', attenuation) -> Right (ray', ray_color * attenuation.v3)
+          Nothing -> Left (ray, mempty)
+      Nothing -> Left (ray, ray_color)
 
 shader :: PixelData -> Color
-shader (PixelData {color}) = Color $ V3.merge (*) base color
+shader (PixelData {attenuation}) = Color $ attenuation * base
   where
     base = V3 0.5 0.7 1.0
+
+-- unit_direction = unit ray.direction
+-- a = 0.5 * (unit_direction.y + 1.0)
+-- color = fmap ((1.0 - a) *) (splat 1) + fmap (a *) base
 
 cast :: forall t. (Foldable t) => Ray -> Interval -> t CanHit -> Maybe Hit
 cast ray interval = foldl recast Nothing
   where
     recast Nothing c = hit ray interval c
-    recast (Just h1) c = case hit ray interval {Interval.max = h1.t} c of
+    recast (Just h1) c = case hit ray interval c of
       Nothing -> Just h1
       Just h2 -> Just $ if h2.t < h1.t then h2 else h1
 
 bytes :: Color -> V3 Int
-bytes (Color c) = fmap u8 c
+bytes (Color c) = fmap (byteRange . gammaCorrected) c
   where
-    u8 :: Double -> Int
-    u8 v = floor . (* 256) $ v `inside` Interval 0 0.999
+    byteRange :: Double -> Int
+    byteRange v = floor . (* 256) $ v `inside` Interval 0 0.999
+
+    gammaCorrected :: Double -> Double
+    gammaCorrected v
+      | v > 0 = sqrt v
+      | otherwise = 0
 
 randomOnHemisphere :: StdGen -> V3 Double -> (V3 Double, StdGen)
 randomOnHemisphere g normal = if V3.dot vec normal > 0 then (vec, g') else (-vec, g')
@@ -187,7 +195,7 @@ randomOnHemisphere g normal = if V3.dot vec normal > 0 then (vec, g') else (-vec
     (vec, g') = randomUnit g
 
 randomUnit :: StdGen -> (V3 Double, StdGen)
-randomUnit g = if sqrd < 1 && sqrd > 0 then (unit v3, g''') else randomUnit g'''
+randomUnit g = if sqrd > 0 then (unit v3, g''') else randomUnit g'''
   where
     sqrd = V3.lengthSquared v3
     v3 = V3 x y z

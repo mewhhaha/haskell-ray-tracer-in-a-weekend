@@ -6,17 +6,18 @@ import Interval
 import Ray
 import V3
 
-data Sphere = Sphere
+data Sphere = forall m. (Material m) => Sphere
   { center :: P3 Double,
-    radius :: Double
+    radius :: Double,
+    material :: m
   }
 
-mkSphere :: P3 Double -> Double -> Sphere
-mkSphere center radius = Sphere center (Prelude.max 0 radius)
+mkSphere :: forall m. (Material m) => (Double, Double, Double) -> Double -> m -> Sphere
+mkSphere (x, y, z) radius = Sphere (mkP3 x y z) (Prelude.max 0 radius)
 
 instance Hittable Sphere where
   hit :: Ray -> Interval -> Sphere -> Maybe Hit
-  hit ray interval (Sphere center radius) = do
+  hit ray interval (Sphere center radius material) = do
     let oc = center.v3 - ray.origin.v3
 
     let a = V3.lengthSquared ray.direction
@@ -42,7 +43,7 @@ instance Hittable Sphere where
           Front -> outward_normal
           Back -> -outward_normal
 
-    Just $ Hit {t, p, normal, face}
+    Just $ Hit {t, p, normal, face, material}
     where
       faceDirection outwardNormal =
         if V3.dot ray.direction outwardNormal < 0

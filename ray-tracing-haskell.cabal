@@ -19,7 +19,7 @@ common warnings
 executable ray-tracing-haskell
     import:           warnings
     main-is:          Main.hs
-    other-modules:    V3, Interval, Camera, Color, Ray, Sphere, World
+    other-modules:    V3, Interval, Camera, Color, Ray, Sphere, World, Material
     -- other-extensions:
     build-depends:    base ^>=4.17.2.1, mtl, random, parallel, text
     hs-source-dirs:   app
