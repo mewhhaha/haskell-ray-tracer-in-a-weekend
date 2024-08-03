@@ -3,7 +3,6 @@ module Ray (Ray (Ray, origin, direction), at, hit, Hit (..), Face (Front, Back),
 import Color
 import Interval
 import System.Random (StdGen)
-import System.Random.Stateful (Random (randomR))
 import V3
 
 data Face = Front | Back

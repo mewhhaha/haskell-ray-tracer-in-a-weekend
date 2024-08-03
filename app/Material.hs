@@ -67,11 +67,6 @@ instance Material Dialectric where
     let scattered = Ray (p h) direction
     Just (scattered, attenuation)
 
-randomOnHemisphere :: StdGen -> V3 Double -> (V3 Double, StdGen)
-randomOnHemisphere g normal = if V3.dot vec normal > 0 then (vec, g') else (-vec, g')
-  where
-    (vec, g') = randomUnit g
-
 randomUnit :: StdGen -> (V3 Double, StdGen)
 randomUnit g = if sqrd > 0 then (unit v3, g''') else randomUnit g'''
   where

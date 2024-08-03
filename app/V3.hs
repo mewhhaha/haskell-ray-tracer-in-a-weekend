@@ -1,6 +1,6 @@
 {-# LANGUAGE DeriveGeneric #-}
 
-module V3 (P3 (P3, v3), mkP3, V3 (V3, x, y, z), V3.length, lengthSquared, dot, unit, splat, isNearZero) where
+module V3 (P3 (P3, v3), mkP3, V3 (V3, x, y, z), V3.length, lengthSquared, dot, unit, splat, isNearZero, cross, up) where
 
 import Control.Parallel.Strategies (NFData)
 import GHC.Generics (Generic)
@@ -52,6 +52,12 @@ merge f (V3 x1 y1 z1) (V3 x2 y2 z2) = V3 (f x1 x2) (f y1 y2) (f z1 z2)
 splat :: d -> V3 d
 splat v = V3 v v v
 
+cross :: V3 Double -> V3 Double -> V3 Double
+cross (V3 x1 y1 z1) (V3 x2 y2 z2) = V3 (y1 * z2 - z1 * y2) (z1 * x2 - x1 * z2) (x1 * y2 - y1 * x2)
+
+isNearZero :: V3 Double -> Bool
+isNearZero v = let s = 1e-8 in all ((< s) . abs) v
+
 newtype P3 d = P3
   { v3 :: V3 d
   }
@@ -59,5 +65,5 @@ newtype P3 d = P3
 mkP3 :: d -> d -> d -> P3 d
 mkP3 x y z = P3 (V3 x y z)
 
-isNearZero :: V3 Double -> Bool
-isNearZero v = let s = 1e-8 in all (< s) v
+up :: V3 Double
+up = V3 0 1 0
