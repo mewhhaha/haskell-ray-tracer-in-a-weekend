@@ -1,4 +1,4 @@
-module Sphere (mkSphere) where
+module Sphere (mkSphere, Sphere) where
 
 import Data.Foldable (find)
 import Data.Functor ((<&>))
@@ -6,11 +6,7 @@ import Interval
 import Ray
 import V3
 
-data Sphere = forall m. (Material m) => Sphere
-  { center :: P3 Double,
-    radius :: Double,
-    material :: m
-  }
+data Sphere = forall m. (Material m) => Sphere (P3 Double) Double m
 
 mkSphere :: forall m. (Material m) => (Double, Double, Double) -> Double -> m -> Sphere
 mkSphere (x, y, z) radius = Sphere (mkP3 x y z) (Prelude.max 0 radius)

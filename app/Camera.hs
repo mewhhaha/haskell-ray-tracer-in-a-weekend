@@ -145,7 +145,7 @@ render camera = do
 
         return $ u + v
 
-  let pixels = fmap (draw camera objects) (zip gs uvs) `using` parListChunk 64 rdeepseq
+  let pixels = fmap (draw camera objects) (zip gs uvs) `using` parListChunk (floor camera.window.width) rdeepseq
 
   return $ Texture pixels
 
