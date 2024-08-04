@@ -1,14 +1,14 @@
 module Window (Size (..), Window (..), mkWindow) where
 
 data Size = Size
-  { width :: Int,
-    ratio :: (Int, Int)
+  { width :: !Int,
+    ratio :: !(Int, Int)
   }
 
 data Window = Window
-  { ratio :: Double,
-    height :: Double,
-    width :: Double
+  { ratio :: !Double,
+    height :: !Double,
+    width :: !Double
   }
 
 mkWindow :: Size -> Window

@@ -5,17 +5,23 @@ module V3 (P3 (P3, v3), mkP3, V3 (V3, x, y, z), V3.length, lengthSquared, dot, u
 import Control.Parallel.Strategies (NFData)
 import GHC.Generics (Generic)
 
-data V3 d = V3 {x :: d, y :: d, z :: d}
+data V3 d = V3 {x :: !d, y :: !d, z :: !d}
   deriving (Show, Generic)
 
 instance (NFData d) => NFData (V3 d)
 
 instance Num (V3 Double) where
+  (+) :: V3 Double -> V3 Double -> V3 Double
   (+) = (<>)
+  (*) :: V3 Double -> V3 Double -> V3 Double
   (*) = merge (*)
+  abs :: V3 Double -> V3 Double
   abs = fmap abs
+  signum :: V3 Double -> V3 Double
   signum = fmap signum
+  fromInteger :: Integer -> V3 Double
   fromInteger v = splat (fromInteger v)
+  negate :: V3 Double -> V3 Double
   negate = fmap negate
 
 instance Functor V3 where

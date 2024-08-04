@@ -4,6 +4,7 @@ import Camera (Focus (..), Look (..), Sampling (..), Size (..), height, mkCamera
 import Color (Color (Color), rgb)
 import Control.Monad.State (State, evalState, get, put)
 import Data.Maybe (catMaybes)
+import Data.Vector qualified as Vector
 import Material (Dialectric (..), Lambertian (..), Metal (..))
 import Ray (CanHit (CanHit), Material)
 import Sphere (mkSphere)
@@ -115,7 +116,7 @@ main = do
   let height = camera.window.height
 
   let (rng, rng') = split $ mkStdGen 0
-  let world = WorldState (scene rng) rng'
+  let world = WorldState (Vector.fromList $ scene rng) rng'
 
   let texture = evalState (render camera) world
 

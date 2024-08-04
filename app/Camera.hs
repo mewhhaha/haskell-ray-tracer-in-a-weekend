@@ -149,6 +149,7 @@ render camera = do
 
   return $ Texture pixels
 
+{-# INLINE draw #-}
 draw :: forall t. (Foldable t) => Camera -> t Ray.CanHit -> (StdGen, V3 Double) -> V3 Int
 draw camera objects (gen, uv) = do
   let du = camera.du
@@ -188,6 +189,7 @@ data PixelData = PixelData
     ray :: Ray.Ray
   }
 
+{-# INLINE sample #-}
 sample :: forall t. (Foldable t) => Int -> StdGen -> Ray.Ray -> t Ray.CanHit -> PixelData
 sample depth g r world = do
   let iterations = take depth $ generators g

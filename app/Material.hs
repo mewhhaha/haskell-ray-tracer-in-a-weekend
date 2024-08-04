@@ -11,6 +11,7 @@ newtype Lambertian = Lambertian
   }
 
 instance Material Lambertian where
+  {-# INLINE scatter #-}
   scatter :: StdGen -> Ray -> Hit -> Lambertian -> Maybe (Ray, Color)
   scatter g _ h Lambertian {albedo} = do
     let scatter_direction = h.normal + fst (randomUnit g)
@@ -24,6 +25,7 @@ data Metal = Metal
   }
 
 instance Material Metal where
+  {-# INLINE scatter #-}
   scatter :: StdGen -> Ray -> Hit -> Metal -> Maybe (Ray, Color)
   scatter g ray h Metal {albedo, fuzz} = do
     let reflected = reflect ray.direction h.normal
@@ -40,6 +42,7 @@ newtype Dialectric = Dialectric
   }
 
 instance Material Dialectric where
+  {-# INLINE scatter #-}
   scatter :: StdGen -> Ray -> Hit -> Dialectric -> Maybe (Ray, Color)
   scatter g ray h Dialectric {refraction_index} = do
     let attenuation = rgb 1 1 1

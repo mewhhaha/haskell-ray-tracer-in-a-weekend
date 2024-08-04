@@ -12,6 +12,7 @@ mkSphere :: forall m. (Material m) => (Double, Double, Double) -> Double -> m ->
 mkSphere (x, y, z) radius = Sphere (mkP3 x y z) (Prelude.max 0 radius)
 
 instance Hittable Sphere where
+  {-# INLINE hit #-}
   hit :: Ray -> Interval -> Sphere -> Maybe Hit
   hit ray interval (Sphere center radius material) = do
     let oc = center.v3 - ray.origin.v3
