@@ -1,4 +1,4 @@
-module Camera (render, mkCamera, Camera (viewport, window), Window (width, height, ratio), Viewport, mkWindow, pixels, Look (..), Size (..)) where
+module Camera (render, mkCamera, Camera (viewport, window), Window (width, height, ratio), Sampling (..), Viewport, mkWindow, pixels, Look (..), Size (..), Focus (..)) where
 
 import Color
 import Control.Monad.State
@@ -6,11 +6,16 @@ import Control.Parallel.Strategies (parListChunk, rdeepseq, using)
 import Data.Functor ((<&>))
 import Interval
 import Ray (CanHit, Hit (Hit), Hittable (hit), Material (scatter), Ray (Ray), material, t)
-import System.Random (Random (random, randomR, randomRs), RandomGen (split), StdGen)
+import System.Random (Random (randomR, randomRs), RandomGen (split), StdGen)
 import V3 (P3 (..), V3 (..))
 import V3 qualified
 import Window
 import World (World, env, rng)
+
+data DefocusDisk = DefocusDisk
+  { u :: V3 Double,
+    v :: V3 Double
+  }
 
 data Viewport = Viewport
   { width :: Double,
@@ -34,20 +39,18 @@ mkSamples :: Int -> Int -> Samples
 mkSamples count = Samples count (1.0 / fromIntegral count)
 
 data Camera = Camera
-  { focal_length :: Double,
-    window :: Window,
+  { window :: Window,
     viewport :: Viewport,
     du :: V3 Double,
     dv :: V3 Double,
-    p00 :: V3 Double,
+    top_left :: V3 Double,
     samples :: Samples,
-    vfov :: Double,
     look_from :: P3 Double,
     look_at :: P3 Double,
+    vfov :: Double,
     vup :: V3 Double,
-    u :: V3 Double,
-    v :: V3 Double,
-    w :: V3 Double
+    defocus_disk :: DefocusDisk,
+    defocus_angle :: Double
   }
 
 data Look = Look
@@ -57,43 +60,59 @@ data Look = Look
     fov :: Double
   }
 
-mkCamera :: Window -> Look -> Camera
-mkCamera window Look {look_from, look_at, up, fov} = do
+data Focus = Focus
+  { focus_distance :: Double,
+    defocus_angle :: Double
+  }
+
+data Sampling = Sampling
+  { samples :: Int,
+    bounces :: Int
+  }
+
+mkCamera :: Window -> Look -> Focus -> Sampling -> Camera
+mkCamera window Look {look_from, look_at, up, fov} Focus {focus_distance, defocus_angle} Sampling {samples, bounces} = do
   -- top left of the viewport
-  let focal_length = 1.0
   let theta = degreesToRadians fov
   let h = tan (theta / 2)
 
-  let viewport = mkViewport (2.0 * h * focal_length) window
+  let viewport = mkViewport (2.0 * h * focus_distance) window
 
   let w = V3.unit (look_from.v3 - look_at.v3)
-  let u = V3.unit (V3.cross (V3 0 1 0) w)
+  let u = V3.unit (V3.cross up w)
   let v = V3.cross w u
 
   let viewport_u = fmap (viewport.width *) u
   let viewport_v = fmap (viewport.height *) (-v)
 
-  let viewport00 = look_from.v3 - fmap (focal_length *) w - fmap (0.5 *) (viewport_u + viewport_v)
+  let pixel_delta_u = viewport_u <&> (/ window.width)
+  let pixel_delta_v = viewport_v <&> (/ window.height)
 
-  let du = viewport_u <&> (/ window.width)
-  let dv = viewport_v <&> (/ window.height)
+  let viewport_top_left = look_from.v3 - fmap (focus_distance *) w - fmap (/ 2) (viewport_u + viewport_v)
+
+  let defocus_radius = focus_distance * tan (degreesToRadians $ defocus_angle / 2)
+  let defocus_disk =
+        DefocusDisk
+          { u = fmap (defocus_radius *) u,
+            v = fmap (defocus_radius *) v
+          }
+
+  let pixels_top_left = viewport_top_left + fmap (0.5 *) (pixel_delta_u + pixel_delta_v)
 
   Camera
     { look_from,
       look_at,
-      focal_length = 1.0,
       window,
       viewport,
-      du,
-      dv,
+      du = pixel_delta_u,
+      dv = pixel_delta_v,
       -- top left of the viewport + offset to the first pixel
-      p00 = viewport00 + fmap (0.5 *) (du + dv),
-      samples = mkSamples 100 50,
+      top_left = pixels_top_left,
+      samples = mkSamples samples bounces,
       vfov = fov,
       vup = up,
-      u,
-      v,
-      w
+      defocus_angle = defocus_angle,
+      defocus_disk
     }
 
 newtype Texture
@@ -112,19 +131,19 @@ render camera = do
   (g, g') <- gets (split . rng)
   modify $ \w -> w {rng = g'}
 
-  let du = camera.du
-  let dv = camera.dv
-
   let height = camera.window.height
   let width = camera.window.width
+
+  let du = camera.du
+  let dv = camera.dv
 
   let gs = generators g
 
   let uvs = do
-        v <- [fmap (j *) dv | j <- [0 .. height - 1]]
-        u <- [fmap (i *) du | i <- [0 .. width - 1]]
+        v <- fmap (\j -> fmap (j *) dv) [0 .. height - 1]
+        u <- fmap (\i -> fmap (i *) du) [0 .. width - 1]
 
-        return (u + v)
+        return $ u + v
 
   let pixels = fmap (draw camera objects) (zip gs uvs) `using` parListChunk 64 rdeepseq
 
@@ -136,18 +155,25 @@ draw camera objects (gen, uv) = do
   let dv = camera.dv
   let samples = camera.samples
 
-  let (gx, gy) = split gen
-
-  let center = camera.p00 + uv
+  let (gen', gx, gy) = case take 3 $ generators gen of
+        [a, b, c] -> (a, b, c)
+        _ -> error "unreachable"
 
   let xs = take (samples.count - 1) (randomRs (-0.5, 0.5) gx)
   let ys = take (samples.count - 1) (randomRs (-0.5, 0.5) gy)
 
   let offsets = [fmap (x *) du + fmap (y *) dv | (x, y) <- zip xs ys]
 
-  let direction = center - camera.look_from.v3
+  let rays =
+        [ do
+            let defocus_origin = fst $ defocusDiskSample gd camera
+            let origin = if camera.defocus_angle <= 0 then camera.look_from.v3 else defocus_origin
+            let pixel_sample = camera.top_left + uv + fmap (offset.x *) du + fmap (offset.y *) dv
+            let direction = pixel_sample - origin
 
-  let rays = [Ray.Ray (P3 camera.look_from.v3) (direction + offset) | offset <- mempty : offsets]
+            Ray.Ray (P3 origin) direction
+          | (gd, offset) <- zip (generators gen') (mempty : offsets)
+        ]
 
   let sampled_square = [sample samples.bounces g ray objects | (g, ray) <- zip (generators gen) rays]
 
@@ -200,20 +226,6 @@ bytes (Color c) = fmap (byteRange . gammaCorrected) c
       | v > 0 = sqrt v
       | otherwise = 0
 
-randomOnHemisphere :: StdGen -> V3 Double -> (V3 Double, StdGen)
-randomOnHemisphere g normal = if V3.dot vec normal > 0 then (vec, g') else (-vec, g')
-  where
-    (vec, g') = randomUnit g
-
-randomUnit :: StdGen -> (V3 Double, StdGen)
-randomUnit g = if sqrd > 0 then (V3.unit v3, g''') else randomUnit g'''
-  where
-    sqrd = V3.lengthSquared v3
-    v3 = V3 x y z
-    (x, g') = randomR (-1, 1) g
-    (y, g'') = randomR (-1, 1) g'
-    (z, g''') = randomR (-1, 1) g''
-
 randomInUnitDisk :: StdGen -> (V3 Double, StdGen)
 randomInUnitDisk g = if sqrd > 0 then (V3.unit v3, g'') else randomInUnitDisk g''
   where
@@ -222,5 +234,11 @@ randomInUnitDisk g = if sqrd > 0 then (V3.unit v3, g'') else randomInUnitDisk g'
     (x, g') = randomR (-1, 1) g
     (y, g'') = randomR (-1, 1) g'
 
+defocusDiskSample :: StdGen -> Camera -> (V3 Double, StdGen)
+defocusDiskSample g Camera {look_from, defocus_disk} = do
+  let (p, g') = randomInUnitDisk g
+  let s = look_from.v3 + fmap (p.x *) defocus_disk.u + fmap (p.y *) defocus_disk.v
+  (s, g')
+
 degreesToRadians :: Double -> Double
-degreesToRadians degrees = degrees * pi / 180
+degreesToRadians degrees = degrees * (pi / 180.0)

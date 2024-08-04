@@ -53,7 +53,11 @@ splat :: d -> V3 d
 splat v = V3 v v v
 
 cross :: V3 Double -> V3 Double -> V3 Double
-cross (V3 x1 y1 z1) (V3 x2 y2 z2) = V3 (y1 * z2 - z1 * y2) (z1 * x2 - x1 * z2) (x1 * y2 - y1 * x2)
+cross u v = do
+  let x = u.y * v.z - u.z * v.y
+  let y = u.z * v.x - u.x * v.z
+  let z = u.x * v.y - u.y * v.x
+  V3 x y z
 
 isNearZero :: V3 Double -> Bool
 isNearZero v = let s = 1e-8 in all ((< s) . abs) v

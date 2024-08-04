@@ -1,6 +1,6 @@
 module Main (main) where
 
-import Camera (Look (..), Size (..), height, mkCamera, mkWindow, pixels, render, window)
+import Camera (Focus (..), Look (..), Sampling (..), Size (..), height, mkCamera, mkWindow, pixels, render, window)
 import Color (rgb)
 import Control.Monad.State (evalState)
 import Material (Dialectric (..), Lambertian (..), Metal (..))
@@ -46,6 +46,14 @@ main = do
               look_at = mkP3 0 0 (-1),
               up = V3.up,
               fov = 20
+            }
+          Camera.Focus
+            { defocus_angle = 10.0,
+              focus_distance = 3.4
+            }
+          Camera.Sampling
+            { samples = 100,
+              bounces = 50
             }
 
   let width = camera.window.width

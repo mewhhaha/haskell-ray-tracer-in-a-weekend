@@ -12,7 +12,9 @@ data Window = Window
   }
 
 mkWindow :: Size -> Window
-mkWindow Size {width, ratio = (rw, rh)} = Window ratio (fromIntegral height) (fromIntegral width)
-  where
-    ratio = fromIntegral rw / fromIntegral rh
-    height = Prelude.max (1 :: Int) $ floor (fromIntegral width / ratio)
+mkWindow Size {width, ratio = (rw, rh)} = do
+  let ratio = fromIntegral rw / fromIntegral rh
+
+  let height :: Int = Prelude.max 1 $ floor (fromIntegral width / ratio)
+
+  Window ratio (fromIntegral height) (fromIntegral width)
