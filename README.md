@@ -11,3 +11,5 @@ Using a justfile that's set to powershell (since I'm on Windows) to run the caba
 ```bash
 just run
 ```
+
+![Final render](./render.png)
