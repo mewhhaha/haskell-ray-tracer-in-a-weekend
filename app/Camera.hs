@@ -2,26 +2,26 @@ module Camera (render, mkCamera, Camera (viewport, window), Window (width, heigh
 
 import Color
 import Control.Monad.State
-import Control.Parallel.Strategies (parListChunk, rdeepseq, using)
 import Data.Functor ((<&>))
+import Data.Vector (Vector)
+import Data.Vector qualified as Vector
+import Data.Vector.Strategies (parVector, using)
 import Interval
 import Ray (CanHit, Hit (Hit), Hittable (hit), Material (scatter), Ray (Ray), material, t)
-import System.Random (Random (randomR, randomRs), RandomGen (split), StdGen)
+import System.Random (Random (randomR), RandomGen (split), StdGen)
 import V3 (P3 (..), V3 (..))
 import V3 qualified
 import Window
 import World (World, env, rng)
 
 data DefocusDisk = DefocusDisk
-  { u :: V3 Double,
-    v :: V3 Double
+  { u :: !(V3 Double),
+    v :: !(V3 Double)
   }
 
 data Viewport = Viewport
-  { width :: Double,
-    height :: Double
-    -- u :: V3 Double,
-    -- v :: V3 Double
+  { width :: !Double,
+    height :: !Double
   }
 
 mkViewport :: Double -> Window -> Viewport
@@ -30,44 +30,44 @@ mkViewport height window = Viewport {width, height}
     width = height * (window.width / window.height)
 
 data Samples = Samples
-  { count :: Int,
-    scale :: Double,
-    bounces :: Int
+  { count :: !Int,
+    scale :: !Double,
+    bounces :: !Int
   }
 
 mkSamples :: Int -> Int -> Samples
 mkSamples count = Samples count (1.0 / fromIntegral count)
 
 data Camera = Camera
-  { window :: Window,
-    viewport :: Viewport,
-    du :: V3 Double,
-    dv :: V3 Double,
-    top_left :: V3 Double,
-    samples :: Samples,
-    look_from :: P3 Double,
-    look_at :: P3 Double,
-    vfov :: Double,
-    vup :: V3 Double,
-    defocus_disk :: DefocusDisk,
-    defocus_angle :: Double
+  { window :: !Window,
+    viewport :: !Viewport,
+    du :: !(V3 Double),
+    dv :: !(V3 Double),
+    top_left :: !(V3 Double),
+    samples :: !Samples,
+    look_from :: !(P3 Double),
+    look_at :: !(P3 Double),
+    vfov :: !Double,
+    vup :: !(V3 Double),
+    defocus_disk :: !DefocusDisk,
+    defocus_angle :: !Double
   }
 
 data Look = Look
-  { look_from :: P3 Double,
-    look_at :: P3 Double,
-    up :: V3 Double,
-    fov :: Double
+  { look_from :: !(P3 Double),
+    look_at :: !(P3 Double),
+    up :: !(V3 Double),
+    fov :: !Double
   }
 
 data Focus = Focus
-  { focus_distance :: Double,
-    defocus_angle :: Double
+  { focus_distance :: !Double,
+    defocus_angle :: !Double
   }
 
 data Sampling = Sampling
-  { samples :: Int,
-    bounces :: Int
+  { samples :: !Int,
+    bounces :: !Int
   }
 
 mkCamera :: Window -> Look -> Focus -> Sampling -> Camera
@@ -117,13 +117,11 @@ mkCamera window Look {look_from, look_at, up, fov} Focus {focus_distance, defocu
 
 newtype Texture
   = Texture
-  { pixels :: [V3 Int]
+  { pixels :: Vector (V3 Int)
   }
 
-generators :: StdGen -> [StdGen]
-generators g = g' : generators g''
-  where
-    (g', g'') = split g
+generators :: Int -> StdGen -> Vector StdGen
+generators n = Vector.iterateN n (snd . split)
 
 render :: Camera -> World Texture
 render camera = do
@@ -137,50 +135,51 @@ render camera = do
   let du = camera.du
   let dv = camera.dv
 
-  let gs = generators g
-
   let uvs = do
-        v <- fmap (\j -> fmap (j *) dv) [0 .. height - 1]
-        u <- fmap (\i -> fmap (i *) du) [0 .. width - 1]
+        v <- fmap (\j -> fmap (j *) dv) (Vector.iterateN (floor height) (+ 1) 0)
+        u <- fmap (\i -> fmap (i *) du) (Vector.iterateN (floor width) (+ 1) 0)
 
         return $ u + v
 
-  let pixels = fmap (draw camera objects) (zip gs uvs) `using` parListChunk (floor camera.window.width) rdeepseq
+  let gs = generators (Vector.length uvs) g
 
-  return $ Texture pixels
+  let tasks = fmap (draw camera objects) (Vector.zip gs uvs) `using` parVector (floor width)
+
+  return $ Texture tasks
 
 {-# INLINE draw #-}
-draw :: forall t. (Foldable t) => Camera -> t Ray.CanHit -> (StdGen, V3 Double) -> V3 Int
+draw :: Camera -> Vector Ray.CanHit -> (StdGen, V3 Double) -> V3 Int
 draw camera objects (gen, uv) = do
   let du = camera.du
   let dv = camera.dv
   let samples = camera.samples
 
-  let (gen', gx, gy) = case take 3 $ generators gen of
-        [a, b, c] -> (a, b, c)
-        _ -> error "unreachable"
+  let (gx, g') = split gen
+  let (gy, g'') = split g'
+  let (_, g''') = split g''
 
-  let xs = take (samples.count - 1) (randomRs (-0.5, 0.5) gx)
-  let ys = take (samples.count - 1) (randomRs (-0.5, 0.5) gy)
+  let random_samples = randomNRs samples.count (-0.5, 0.5)
 
-  let offsets = [fmap (x *) du + fmap (y *) dv | (x, y) <- zip xs ys]
+  let offsets = do
+        (x, y) <- Vector.zip (random_samples gx) (random_samples gy)
+        return $ fmap (x *) du + fmap (y *) dv
 
-  let rays =
-        [ do
-            let defocus_origin = fst $ defocusDiskSample gd camera
-            let origin = if camera.defocus_angle <= 0 then camera.look_from.v3 else defocus_origin
-            let pixel_sample = camera.top_left + uv + fmap (offset.x *) du + fmap (offset.y *) dv
-            let direction = pixel_sample - origin
+  let rays = do
+        (gd, offset) <- Vector.zip (generators (Vector.length offsets) g''') offsets
+        let defocus_origin = fst $ defocusDiskSample gd camera
+        let origin = if camera.defocus_angle <= 0 then camera.look_from.v3 else defocus_origin
+        let pixel_sample = camera.top_left + uv + fmap (offset.x *) du + fmap (offset.y *) dv
+        let direction = pixel_sample - origin
 
-            Ray.Ray (P3 origin) direction
-          | (gd, offset) <- zip (generators gen') (mempty : offsets)
-        ]
+        return (gd, Ray.Ray (P3 origin) direction)
 
-  let sampled_square = [sample samples.bounces g ray objects | (g, ray) <- zip (generators gen) rays]
+  let sampled_square = do
+        (gd, ray) <- rays
+        return $ sample samples.bounces gd ray objects
 
   let clear_color = rgb 0.5 0.7 1.0
 
-  let color = mconcat (attenuate clear_color <$> sampled_square)
+  let color = sum (fmap (attenuate clear_color) sampled_square)
 
   bytes $ Color (fmap (samples.scale *) color.v3)
 
@@ -190,9 +189,9 @@ data PixelData = PixelData
   }
 
 {-# INLINE sample #-}
-sample :: forall t. (Foldable t) => Int -> StdGen -> Ray.Ray -> t Ray.CanHit -> PixelData
+sample :: Int -> StdGen -> Ray.Ray -> Vector Ray.CanHit -> PixelData
 sample depth g r world = do
-  let iterations = take depth $ generators g
+  let iterations = generators depth g
 
   case foldM bounce (r, V3.splat 1.0) iterations of
     Right (ray, _) -> PixelData {ray, attenuation = mempty}
@@ -244,3 +243,10 @@ defocusDiskSample g Camera {look_from, defocus_disk} = do
 
 degreesToRadians :: Double -> Double
 degreesToRadians degrees = degrees * (pi / 180.0)
+
+randomNRs :: (Random a) => Int -> (a, a) -> StdGen -> Vector a
+randomNRs n range =
+  Vector.unfoldrExactN
+    n
+    ( \g' -> let (v, g'') = randomR range g' in (v, g'')
+    )

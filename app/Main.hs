@@ -4,21 +4,23 @@ import Camera (Focus (..), Look (..), Sampling (..), Size (..), height, mkCamera
 import Color (Color (Color), rgb)
 import Control.Monad.State (State, evalState, get, put)
 import Data.Maybe (catMaybes)
+import Data.Text (Text)
+import Data.Text.IO qualified as Text
 import Data.Vector qualified as Vector
+import Formatting (int, sformat, (%))
 import Material (Dialectric (..), Lambertian (..), Metal (..))
 import Ray (CanHit (CanHit), Material)
 import Sphere (mkSphere)
 import System.Random (RandomGen (split), mkStdGen, randomRs)
 import System.Random.Stateful (StdGen)
-import Text.Printf (printf)
 import V3 (V3 (..), length, mkP3, unit, up)
 import Window qualified
 import World (WorldState (WorldState))
 
 type Doubles a = State [Double] a
 
-pack :: forall a. (Material a) => V3 Double -> a -> CanHit
-pack V3 {x, y, z} = CanHit . mkSphere (x, y, z) 0.2
+mkCanHit :: forall a. (Material a) => V3 Double -> a -> CanHit
+mkCanHit V3 {x, y, z} = CanHit . mkSphere (x, y, z) 0.2
 
 getDouble :: Doubles Double
 getDouble = do
@@ -43,14 +45,14 @@ randomDiffuse at = do
   color <- randomColor
   let material = Lambertian color
 
-  return $ pack at material
+  return $ mkCanHit at material
 
 randomMetal :: V3 Double -> Doubles CanHit
 randomMetal at = do
   color <- randomColor
   fuzz <- getDouble
   let material = Metal color fuzz
-  return $ pack at material
+  return $ mkCanHit at material
 
 scene :: StdGen -> [CanHit]
 scene gen = do
@@ -74,7 +76,7 @@ scene gen = do
               v
                 | v < 0.8 -> randomDiffuse center
                 | v < 0.95 -> randomMetal center
-                | otherwise -> return $ pack center (Dialectric 1.5) -- Glass
+                | otherwise -> return $ mkCanHit center (Dialectric 1.5) -- Glass
             return $ Just sphere
 
   let stream_of_values :: [Double] = randomRs (0.0, 1.0) gen
@@ -121,14 +123,18 @@ main = do
   let texture = evalState (render camera) world
 
   let header = formatHeader (floor width) (floor height)
-  let body = formatColor <$> texture.pixels
 
-  let output = header <> mconcat body
+  Text.putStr header
+  Vector.forM_ texture.pixels $ \pixel -> do
+    let color = formatColor pixel
+    Text.putStr color
 
-  putStr output
+formatColor :: V3 Int -> Text
+formatColor (V3 r g b) = formatter r g b
   where
-    formatColor :: V3 Int -> String
-    formatColor (V3 r g b) = printf "%d %d %d\n" r g b
+    formatter = sformat (int % " " % int % " " % int % "\n")
 
-    formatHeader :: Int -> Int -> String
-    formatHeader = printf "P3\n%d %d\n255\n"
+formatHeader :: Int -> Int -> Text
+formatHeader = formatter
+  where
+    formatter = sformat ("P3\n" % int % " " % int % "\n255\n")

@@ -1,6 +1,5 @@
 module Sphere (mkSphere, Sphere) where
 
-import Data.Foldable (find)
 import Data.Functor ((<&>))
 import Interval
 import Ray
@@ -28,7 +27,13 @@ instance Hittable Sphere where
     let root1 = (h - sqrtd) / a
         root2 = (h + sqrtd) / a
 
-    t <- find (contains interval) [root1, root2]
+    t <-
+      if contains interval root1
+        then Just root1
+        else
+          if contains interval root2
+            then Just root2
+            else Nothing
 
     let p = at ray t
 

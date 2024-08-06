@@ -26,9 +26,10 @@ at (Ray (P3 origin) direction) t = P3 (origin + fmap (* t) direction)
 class Hittable a where
   hit :: Ray -> Interval -> a -> Maybe Hit
 
-data CanHit = forall a. (Hittable a) => CanHit a
+data CanHit = forall a. (Hittable a) => CanHit !a
 
 instance Hittable CanHit where
+  hit :: Ray -> Interval -> CanHit -> Maybe Hit
   hit ray limits (CanHit a) = hit ray limits a
 
 class Material a where

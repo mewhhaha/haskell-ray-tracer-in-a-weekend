@@ -4,3 +4,7 @@ image.ppm
 *.eventlog
 threadscope*
 build
+
+# Added by cargo
+
+/target

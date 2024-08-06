@@ -13,6 +13,7 @@ build-type:         Simple
 extra-doc-files:    CHANGELOG.md
 -- extra-source-files:
 
+
 common warnings
     ghc-options: -Wall
 
@@ -21,7 +22,7 @@ executable ray-tracing-haskell
     main-is:          Main.hs
     other-modules:    V3, Interval, Camera, Color, Ray, Sphere, World, Material, Window
     -- other-extensions:
-    build-depends:    base ^>=4.17.2.1, mtl, random, parallel, text, vector
+    build-depends:    base ^>=4.17.2.1, mtl, random, text, vector, vector-strategies, formatting
     hs-source-dirs:   app
     default-language: GHC2021
     default-extensions: DuplicateRecordFields, OverloadedRecordDot, OverloadedStrings
@@ -29,5 +30,4 @@ executable ray-tracing-haskell
         -O3
         -threaded
         -rtsopts
-        -eventlog
         -with-rtsopts=-N
