@@ -1,4 +1,4 @@
-module Camera (render, mkCamera, Camera (viewport, window), Window (width, height, ratio), Sampling (..), Viewport, mkWindow, pixels, Look (..), Size (..), Focus (..)) where
+module Camera (render, mkCamera, Camera (window), CameraConfig (..), Window (width, height, ratio), Viewport, mkWindow, pixels, Size (..)) where
 
 import Color
 import Control.Monad.State
@@ -13,11 +13,6 @@ import V3 (P3 (..), V3 (..))
 import V3 qualified
 import Window
 import World (World, env, rng)
-
-data DefocusDisk = DefocusDisk
-  { u :: !(V3 Double),
-    v :: !(V3 Double)
-  }
 
 data Viewport = Viewport
   { width :: !Double,
@@ -40,38 +35,29 @@ mkSamples count = Samples count (1.0 / fromIntegral count)
 
 data Camera = Camera
   { window :: !Window,
-    viewport :: !Viewport,
     du :: !(V3 Double),
     dv :: !(V3 Double),
     top_left :: !(V3 Double),
     samples :: !Samples,
     look_from :: !(P3 Double),
-    look_at :: !(P3 Double),
-    vfov :: !Double,
-    vup :: !(V3 Double),
-    defocus_disk :: !DefocusDisk,
+    defocus_disk_u :: !(V3 Double),
+    defocus_disk_v :: !(V3 Double),
     defocus_angle :: !Double
   }
 
-data Look = Look
+data CameraConfig = CameraConfig
   { look_from :: !(P3 Double),
     look_at :: !(P3 Double),
     up :: !(V3 Double),
-    fov :: !Double
-  }
-
-data Focus = Focus
-  { focus_distance :: !Double,
-    defocus_angle :: !Double
-  }
-
-data Sampling = Sampling
-  { samples :: !Int,
+    fov :: !Double,
+    focus_distance :: !Double,
+    defocus_angle :: !Double,
+    samples :: !Int,
     bounces :: !Int
   }
 
-mkCamera :: Window -> Look -> Focus -> Sampling -> Camera
-mkCamera window Look {look_from, look_at, up, fov} Focus {focus_distance, defocus_angle} Sampling {samples, bounces} = do
+mkCamera :: Window -> CameraConfig -> Camera
+mkCamera window CameraConfig {look_from, look_at, up, fov, focus_distance, defocus_angle, samples, bounces} = do
   -- top left of the viewport
   let theta = degreesToRadians fov
   let h = tan (theta / 2)
@@ -91,28 +77,22 @@ mkCamera window Look {look_from, look_at, up, fov} Focus {focus_distance, defocu
   let viewport_top_left = look_from.v3 - fmap (focus_distance *) w - fmap (/ 2) (viewport_u + viewport_v)
 
   let defocus_radius = focus_distance * tan (degreesToRadians $ defocus_angle / 2)
-  let defocus_disk =
-        DefocusDisk
-          { u = fmap (defocus_radius *) u,
-            v = fmap (defocus_radius *) v
-          }
+  let defocus_disk_u = fmap (defocus_radius *) u
+  let defocus_disk_v = fmap (defocus_radius *) v
 
   let pixels_top_left = viewport_top_left + fmap (0.5 *) (pixel_delta_u + pixel_delta_v)
 
   Camera
     { look_from,
-      look_at,
       window,
-      viewport,
       du = pixel_delta_u,
       dv = pixel_delta_v,
       -- top left of the viewport + offset to the first pixel
       top_left = pixels_top_left,
       samples = mkSamples samples bounces,
-      vfov = fov,
-      vup = up,
       defocus_angle = defocus_angle,
-      defocus_disk
+      defocus_disk_u,
+      defocus_disk_v
     }
 
 newtype Texture
@@ -236,9 +216,9 @@ randomInUnitDisk g = if sqrd > 0 then (V3.unit v3, g'') else randomInUnitDisk g'
     (y, g'') = randomR (-1, 1) g'
 
 defocusDiskSample :: StdGen -> Camera -> (V3 Double, StdGen)
-defocusDiskSample g Camera {look_from, defocus_disk} = do
+defocusDiskSample g Camera {look_from, defocus_disk_u, defocus_disk_v} = do
   let (p, g') = randomInUnitDisk g
-  let s = look_from.v3 + fmap (p.x *) defocus_disk.u + fmap (p.y *) defocus_disk.v
+  let s = look_from.v3 + fmap (p.x *) defocus_disk_u + fmap (p.y *) defocus_disk_v
   (s, g')
 
 degreesToRadians :: Double -> Double

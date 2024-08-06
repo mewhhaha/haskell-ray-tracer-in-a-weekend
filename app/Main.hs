@@ -1,6 +1,6 @@
 module Main (main) where
 
-import Camera (Focus (..), Look (..), Sampling (..), Size (..), height, mkCamera, mkWindow, pixels, render, window)
+import Camera (CameraConfig (..), Size (..), height, mkCamera, mkWindow, pixels, render, window)
 import Color (Color (Color), rgb)
 import Control.Monad.State (State, evalState, get, put)
 import Data.Maybe (catMaybes)
@@ -99,18 +99,14 @@ main = do
   let camera =
         mkCamera
           window
-          Camera.Look
+          CameraConfig
             { look_from = mkP3 13 2 3,
               look_at = mkP3 0 0 0,
               up = V3.up,
-              fov = 20
-            }
-          Camera.Focus
-            { defocus_angle = 0.6,
-              focus_distance = 10.0
-            }
-          Camera.Sampling
-            { samples = 500,
+              fov = 20,
+              defocus_angle = 0.6,
+              focus_distance = 10.0,
+              samples = 500,
               bounces = 50
             }
 
