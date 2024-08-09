@@ -6,8 +6,8 @@ import Data.Ord qualified as Prelude
 import GHC.Real (infinity)
 
 data Interval = Interval
-  { min :: !Double,
-    max :: !Double
+  { min :: Double,
+    max :: Double
   }
 
 size :: Interval -> Double

@@ -6,8 +6,8 @@ import Ray (CanHit)
 import System.Random (StdGen)
 
 data WorldState = WorldState
-  { env :: !(Vector CanHit),
-    rng :: !StdGen
+  { env :: (Vector CanHit),
+    rng :: StdGen
   }
 
 type World = State WorldState

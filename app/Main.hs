@@ -19,7 +19,7 @@ import World (WorldState (WorldState))
 
 main :: IO ()
 main = do
-  let window = mkWindow Window.Size {width = 1200, ratio = (16, 9)}
+  let window = mkWindow Window.Size {width = 400, ratio = (16, 9)}
   let camera =
         mkCamera
           window
@@ -33,6 +33,21 @@ main = do
               samples = 500,
               bounces = 50
             }
+
+  let width = camera.window.width
+  let height = camera.window.height
+
+  let (rng, rng') = split $ mkStdGen 0
+  let world = WorldState (Vector.fromList $ scene rng) rng'
+
+  let texture = evalState (render camera) world
+
+  let header = formatHeader (floor width) (floor height)
+
+  Text.putStr header
+  Vector.forM_ texture.pixels $ \pixel -> do
+    let color = formatColor pixel
+    Text.putStr color
 
 type Doubles a = State [Double] a
 
@@ -109,21 +124,6 @@ scene gen = do
   let big_metal_sphere = CanHit $ mkSphere (4, 1, 0) 1 material_3
 
   ground : big_glass_sphere : big_diffuse_sphere : big_metal_sphere : spheres
-
-  let width = camera.window.width
-  let height = camera.window.height
-
-  let (rng, rng') = split $ mkStdGen 0
-  let world = WorldState (Vector.fromList $ scene rng) rng'
-
-  let texture = evalState (render camera) world
-
-  let header = formatHeader (floor width) (floor height)
-
-  Text.putStr header
-  Vector.forM_ texture.pixels $ \pixel -> do
-    let color = formatColor pixel
-    Text.putStr color
 
 formatColor :: V3 Int -> Text
 formatColor (V3 r g b) = formatter r g b

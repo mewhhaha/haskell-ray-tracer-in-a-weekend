@@ -15,8 +15,8 @@ import Window
 import World (World, env, rng)
 
 data Viewport = Viewport
-  { width :: !Double,
-    height :: !Double
+  { width :: Double,
+    height :: Double
   }
 
 mkViewport :: Double -> Window -> Viewport
@@ -25,35 +25,35 @@ mkViewport height window = Viewport {width, height}
     width = height * (window.width / window.height)
 
 data Samples = Samples
-  { count :: !Int,
-    scale :: !Double,
-    bounces :: !Int
+  { count :: Int,
+    scale :: Double,
+    bounces :: Int
   }
 
 mkSamples :: Int -> Int -> Samples
 mkSamples count = Samples count (1.0 / fromIntegral count)
 
 data Camera = Camera
-  { window :: !Window,
-    du :: !(V3 Double),
-    dv :: !(V3 Double),
-    top_left :: !(V3 Double),
-    samples :: !Samples,
-    look_from :: !(P3 Double),
-    defocus_disk_u :: !(V3 Double),
-    defocus_disk_v :: !(V3 Double),
-    defocus_angle :: !Double
+  { window :: Window,
+    du :: (V3 Double),
+    dv :: (V3 Double),
+    top_left :: (V3 Double),
+    samples :: Samples,
+    look_from :: (P3 Double),
+    defocus_disk_u :: (V3 Double),
+    defocus_disk_v :: (V3 Double),
+    defocus_angle :: Double
   }
 
 data CameraConfig = CameraConfig
-  { look_from :: !(P3 Double),
-    look_at :: !(P3 Double),
-    up :: !(V3 Double),
-    fov :: !Double,
-    focus_distance :: !Double,
-    defocus_angle :: !Double,
-    samples :: !Int,
-    bounces :: !Int
+  { look_from :: (P3 Double),
+    look_at :: (P3 Double),
+    up :: (V3 Double),
+    fov :: Double,
+    focus_distance :: Double,
+    defocus_angle :: Double,
+    samples :: Int,
+    bounces :: Int
   }
 
 mkCamera :: Window -> CameraConfig -> Camera
