@@ -19,7 +19,7 @@ import World (WorldState (WorldState))
 
 main :: IO ()
 main = do
-  let window = mkWindow Window.Size {width = 400, ratio = (16, 9)}
+  let window = mkWindow Window.Size {width = 1200, ratio = (16, 9)}
   let camera =
         mkCamera
           window
