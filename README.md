@@ -10,6 +10,7 @@ Using a justfile that's set to powershell (since I'm on Windows) to run the caba
 
 1. First attempt: 1088s
 2. Second attempt: 593s // using inline statements for hit, bang patterns and replace list of hittable objects with vector
+3. Third attempt: 400s // unbox materials and spheres
 
 ```bash
 just run

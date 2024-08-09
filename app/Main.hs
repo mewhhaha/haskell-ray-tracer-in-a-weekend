@@ -17,6 +17,23 @@ import V3 (V3 (..), length, mkP3, unit, up)
 import Window qualified
 import World (WorldState (WorldState))
 
+main :: IO ()
+main = do
+  let window = mkWindow Window.Size {width = 1200, ratio = (16, 9)}
+  let camera =
+        mkCamera
+          window
+          CameraConfig
+            { look_from = mkP3 13 2 3,
+              look_at = mkP3 0 0 0,
+              up = V3.up,
+              fov = 20,
+              defocus_angle = 0.6,
+              focus_distance = 10.0,
+              samples = 500,
+              bounces = 50
+            }
+
 type Doubles a = State [Double] a
 
 mkCanHit :: forall a. (Material a) => V3 Double -> a -> CanHit
@@ -92,23 +109,6 @@ scene gen = do
   let big_metal_sphere = CanHit $ mkSphere (4, 1, 0) 1 material_3
 
   ground : big_glass_sphere : big_diffuse_sphere : big_metal_sphere : spheres
-
-main :: IO ()
-main = do
-  let window = mkWindow Window.Size {width = 1200, ratio = (16, 9)}
-  let camera =
-        mkCamera
-          window
-          CameraConfig
-            { look_from = mkP3 13 2 3,
-              look_at = mkP3 0 0 0,
-              up = V3.up,
-              fov = 20,
-              defocus_angle = 0.6,
-              focus_distance = 10.0,
-              samples = 500,
-              bounces = 50
-            }
 
   let width = camera.window.width
   let height = camera.window.height
